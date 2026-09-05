@@ -37,13 +37,13 @@ describe('revStep', () => {
 });
 
 describe('judgeRev', () => {
-  it('接近理想耗時 → EXCELLENT', () => {
+  it('接近理想耗時 → PERFECT', () => {
     const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
-    expect(judgeRev(ideal, 120, SCORE_CFG)).toBe('EXCELLENT');
+    expect(judgeRev(ideal, 120, SCORE_CFG)).toBe('PERFECT');
   });
   it('偏離一些 → GREAT', () => {
     const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
-    expect(judgeRev(ideal * 1.6, 120, SCORE_CFG)).toBe('GREAT');
+    expect(judgeRev(ideal * 2, 120, SCORE_CFG)).toBe('GREAT');
   });
   it('太慢 → GOOD', () => {
     const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
@@ -52,10 +52,11 @@ describe('judgeRev', () => {
 });
 
 describe('revScore', () => {
-  it('EXCELLENT 比 GOOD 高；combo 越高分越高', () => {
+  it('PERFECT>GREAT>GOOD；combo 越高分越高', () => {
     const g = revScore(0, 'GOOD', SCORE_CFG);
-    const e = revScore(0, 'EXCELLENT', SCORE_CFG);
-    expect(e).toBeGreaterThan(g);
+    const gr = revScore(0, 'GREAT', SCORE_CFG);
+    const p = revScore(0, 'PERFECT', SCORE_CFG);
+    expect(p).toBeGreaterThan(gr); expect(gr).toBeGreaterThan(g);
     expect(revScore(10, 'GOOD', SCORE_CFG)).toBeGreaterThan(g);
   });
 });

@@ -14,6 +14,8 @@ export function createUI(canvas) {
   };
   const barImgs = {};
   for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.webp`; }
+  const judgeImgs = {}; // 判定爆炸字（codex 普普風）
+  for (const w of ['GOOD', 'GREAT', 'PERFECT']) { judgeImgs[w] = new Image(); judgeImgs[w].src = import.meta.env.BASE_URL + `judge/${w.toLowerCase()}.webp`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
@@ -30,16 +32,22 @@ export function createUI(canvas) {
     const H = canvas.height;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     for (let i = judges.length - 1; i >= 0; i--) {
-      const j = judges[i]; j.life -= 0.022; j.y -= H * 0.004;
+      const j = judges[i]; j.life -= 0.02; j.y -= H * 0.003;
       if (j.life <= 0) { judges.splice(i, 1); continue; }
-      const pop = Math.min(1, (1 - j.life) * 5), sc = 0.6 + pop * 0.5; // 彈入
-      const col = j.word === 'EXCELLENT' ? '#ffd76b' : j.word === 'GREAT' ? '#4ec3ff' : '#dfe6ff';
-      ctx.save(); ctx.globalAlpha = Math.min(1, j.life * 1.6); ctx.translate(j.x, j.y); ctx.scale(sc, sc);
-      ctx.font = `900 ${Math.round(H * 0.07)}px system-ui`;
-      ctx.lineWidth = 8; ctx.strokeStyle = '#05070f'; ctx.strokeText(j.word, 0, 0);
-      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.fillText(j.word, 0, 0);
-      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.04)}px system-ui`;
-      ctx.fillText(`+${j.pts}`, 0, H * 0.055);
+      const pop = Math.min(1, (1 - j.life) * 6), sc = 0.5 + pop * 0.6; // 彈入
+      const img = judgeImgs[j.word];
+      ctx.save(); ctx.globalAlpha = Math.min(1, j.life * 1.8); ctx.translate(j.x, j.y); ctx.scale(sc, sc);
+      if (img && img.complete && img.naturalWidth) {
+        const w = H * 0.42, h = w * img.naturalHeight / img.naturalWidth;
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+      } else { // 圖未載入退路：彩色大字
+        const col = j.word === 'PERFECT' ? '#ffd76b' : j.word === 'GREAT' ? '#c07bff' : '#4ec3ff';
+        ctx.font = `900 ${Math.round(H * 0.09)}px system-ui`; ctx.lineWidth = 8; ctx.strokeStyle = '#05070f';
+        ctx.strokeText(j.word, 0, 0); ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.fillText(j.word, 0, 0);
+      }
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`;
+      ctx.lineWidth = 5; ctx.strokeStyle = '#05070f'; ctx.strokeText(`+${j.pts}`, 0, H * 0.15);
+      ctx.fillText(`+${j.pts}`, 0, H * 0.15);
       ctx.restore();
     }
     ctx.globalAlpha = 1;

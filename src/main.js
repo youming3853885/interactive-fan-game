@@ -233,7 +233,7 @@ async function loop(pose) {
         ui.judge(j, pts, mult, cx, cy, color);
         sfx.hit(mult >= 3);
         if (leveled) { sfx.comboBurst(mult); sfx.voice('Combo'); }
-        else sfx.voice(j === 'EXCELLENT' ? 'Excellent' : j === 'GREAT' ? 'Great' : 'Good');
+        else sfx.voice(j === 'PERFECT' ? 'Perfect' : j === 'GREAT' ? 'Great' : 'Good');
       }
       return -Math.PI / 2 + sign * st.acc; // marker 沿圈位置
     };

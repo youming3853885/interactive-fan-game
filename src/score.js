@@ -2,13 +2,13 @@ import { direction } from './motion.js';
 
 export const SCORE_CFG = {
   deadzone: 1.5,
-  baseRevScore: 120,   // 每轉完一圈的基礎分
+  sGood: 100, sGreat: 200, sPerfect: 300, // 每級基礎分（再乘 combo 倍率）
   comboStep: 2,        // 每 N 圈 combo 倍率 +1
   comboMax: 5,
   revsPerBeat: 0.5,    // 目標：每 2 拍一圈
-  // 判定視窗（實際整圈耗時 / 理想耗時 的比例）
-  exLo: 0.75, exHi: 1.35,   // EXCELLENT
-  grLo: 0.55, grHi: 1.8,    // GREAT（其餘 GOOD）
+  // 判定視窗（實際整圈耗時 / 理想耗時 的比例）；寬鬆版，容易 PERFECT
+  pfLo: 0.6, pfHi: 1.5,     // PERFECT
+  grLo: 0.4, grHi: 2.2,     // GREAT（其餘 GOOD）
 };
 
 export function targetOmegaFor(bpm, cfg) {
@@ -31,19 +31,19 @@ export function revStep(acc, omega, segDir, dt, cfg) {
   return { acc: na, completed: 0 };
 }
 
-// 依整圈耗時 vs 理想耗時給判定：EXCELLENT / GREAT / GOOD
+// 依整圈耗時 vs 理想耗時給判定：PERFECT / GREAT / GOOD（速率契合度）
 export function judgeRev(revTime, bpm, cfg) {
   const ideal = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
   const r = revTime / ideal;
-  if (r >= cfg.exLo && r <= cfg.exHi) return 'EXCELLENT';
+  if (r >= cfg.pfLo && r <= cfg.pfHi) return 'PERFECT';
   if (r >= cfg.grLo && r <= cfg.grHi) return 'GREAT';
   return 'GOOD';
 }
 
-// 一圈得分 = 基礎 × 判定倍率 × combo 倍率
+// 一圈得分 = 該級固定分 × combo 倍率
 export function revScore(combo, judgment, cfg) {
-  const jm = judgment === 'EXCELLENT' ? 1.5 : judgment === 'GREAT' ? 1.2 : 1.0;
-  return Math.round(cfg.baseRevScore * jm * comboMultiplier(combo, cfg));
+  const base = judgment === 'PERFECT' ? cfg.sPerfect : judgment === 'GREAT' ? cfg.sGreat : cfg.sGood;
+  return base * comboMultiplier(combo, cfg);
 }
 
 export function higherScore(a, b) {
@@ -56,7 +56,7 @@ export function higherScore(a, b) {
 export function gradeFor(score, roundSec, bpm, cfg) {
   const idealRevTime = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
   const expectedRevs = roundSec / idealRevTime;
-  const expected = cfg.baseRevScore * Math.max(1, expectedRevs); // 基準（combo 1x、全 GOOD）
+  const expected = cfg.sGood * Math.max(1, expectedRevs); // 基準（combo 1x、全 GOOD）
   const ratio = score / expected;
   if (ratio >= 2.2) return 'S';
   if (ratio >= 1.4) return 'A';
