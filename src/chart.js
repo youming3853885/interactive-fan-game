@@ -1,7 +1,7 @@
 // 依 BPM 決定性生成段落表（正F/反R/休S），對齊節拍。
 export function chartFromBpm(bpm, stars, roundSec) {
   const beatSec = 60 / bpm;
-  const segBeats = stars >= 4 ? 4 : 8;
+  const segBeats = Math.max(4, Math.round(8 / beatSec));
   const pattern = stars >= 4 ? ['F', 'R', 'F', 'R', 'S'] : ['F', 'R', 'S'];
   const segLen = segBeats * beatSec;
   const chart = [];
