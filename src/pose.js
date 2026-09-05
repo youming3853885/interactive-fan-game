@@ -1,40 +1,44 @@
 import * as poseDetection from '@tensorflow-models/pose-detection';
 import * as tf from '@tensorflow/tfjs';
 
-// 用 MoveNet MULTIPOSE：一次推論同時抓整張畫面裡最多多人（雙人不再跑兩次、速度同單人）。
+// 單一共用 SINGLEPOSE 偵測器：單人吃整張、雙人分別吃左右半張（保證每邊各抓到一人）。
+// 比舊版建 3 個偵測器實例輕很多（那才是雙人 lag 主因）。
 export async function createPoseReader(video) {
-  // 明確用 webgl 後端（最穩、支援最廣），並等它初始化完再建偵測器。
   await tf.setBackend('webgl');
   await tf.ready();
-  const model = poseDetection.SupportedModels.MoveNet;
   const cfg = {
-    modelType: poseDetection.movenet.modelType.MULTIPOSE_LIGHTNING,
-    enableSmoothing: true,          // 內建時間濾波（OneEuro）降抖
-    enableTracking: true,           // 跨幀追蹤，多人身分穩定
-    trackerType: poseDetection.TrackerType.BoundingBox,
+    modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+    enableSmoothing: true,   // 內建時間濾波降抖
     minPoseScore: 0.2,
   };
-  const detector = await poseDetection.createDetector(model, cfg);
+  const det = await poseDetection.createDetector(poseDetection.SupportedModels.MoveNet, cfg);
 
-  function toPerson(p) {
-    const kp = Object.fromEntries(p.keypoints.map((k) => [k.name, k]));
-    const ls = kp['left_shoulder'], rs = kp['right_shoulder'], nose = kp['nose'];
-    const xs = [ls, rs, nose].filter(Boolean).map((k) => k.x);
-    const midX = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0;
+  const half = document.createElement('canvas');
+  const hctx = half.getContext('2d');
+
+  function person(poses) {
+    if (!poses.length) return null;
+    const kp = Object.fromEntries(poses[0].keypoints.map((k) => [k.name, k]));
     return {
-      leftWrist: kp['left_wrist'], leftShoulder: ls,
-      rightWrist: kp['right_wrist'], rightShoulder: rs,
-      midX, score: p.score ?? 1,
+      leftWrist: kp['left_wrist'], leftShoulder: kp['left_shoulder'],
+      rightWrist: kp['right_wrist'], rightShoulder: kp['right_shoulder'],
     };
   }
 
   return {
-    // 回傳畫面中偵測到的人（各含左右手腕/肩 + 中心 x），主迴圈自行分派單/雙人。
-    async readPeople() {
+    // 半張畫面（A=螢幕左=原始右半、B=螢幕右=原始左半），回傳該半邊那個人的手腕/肩（座標在半張內）。
+    async readHalf(side) {
       const w = video.videoWidth, h = video.videoHeight;
-      if (!w || !h) return [];
-      const poses = await detector.estimatePoses(video, { maxPoses: 2 });
-      return poses.map(toPerson);
+      if (!w || !h) return null;
+      half.width = w / 2; half.height = h;
+      const sx = side === 'A' ? w / 2 : 0;
+      hctx.drawImage(video, sx, 0, w / 2, h, 0, 0, w / 2, h);
+      return person(await det.estimatePoses(half));
+    },
+    // 整張畫面（單人用）。
+    async readFull() {
+      if (!video.videoWidth) return null;
+      return person(await det.estimatePoses(video));
     },
   };
 }

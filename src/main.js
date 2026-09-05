@@ -158,6 +158,14 @@ async function boot() {
   loop(pose);
 }
 
+// 半張座標→canvas 像素（含左右鏡像）。A=原始右半、B=原始左半。
+function toCanvas(pt, side) {
+  const halfW = video.videoWidth / 2;
+  const xInFull = (side === 'A' ? halfW : 0) + pt.x;
+  const fx = video.videoWidth - xInFull; // CSS scaleX(-1) 鏡像
+  return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
+}
+
 // 把 pose 全畫面座標換算成 overlay canvas 像素（含左右鏡像）。
 function toCanvasFull(pt) {
   const fx = video.videoWidth - pt.x; // 鏡像
@@ -172,25 +180,16 @@ async function loop(pose) {
   let handA = null, handB = null, handS = null;
   let omegaA = 0, omegaB = 0, omegaS = 0;
   if (phase !== 'select') {
-    const people = await pose.readPeople();
     if (mode === 'single') {
-      // 單手：抓信心最高那個人、他較活躍的那隻手
-      const person = people.slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0] || null;
-      const arm = pickArm(person);
+      const arm = pickArm(await pose.readFull());
       if (arm) { const ang = wristAngle(arm.wrist, arm.shoulder); const r = trackRotation(rotS, ang, dt); rotS.lastAngle = r.state.lastAngle; omegaS = r.omega; handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
       handS = smoothPoint(smS, handS, SMOOTH);
     } else {
-      // 依玩家「實際所在的螢幕左右半邊」指派：螢幕左=A(藍)、螢幕右=B(紅)。
-      // 畫面鏡像 → 螢幕 x = (videoWidth - midX) 換算；每邊取信心最高的人。
-      let pA = null, pB = null;
-      for (const p of people) {
-        const screenX = (video.videoWidth - p.midX) / video.videoWidth * canvas.width;
-        if (screenX < canvas.width / 2) { if (!pA || (p.score || 0) > (pA.score || 0)) pA = p; }
-        else { if (!pB || (p.score || 0) > (pB.score || 0)) pB = p; }
-      }
-      const armA = pickArm(pA), armB = pickArm(pB);
-      if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvasFull(armA.wrist); } else rotA.lastAngle = null;
-      if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvasFull(armB.wrist); } else rotB.lastAngle = null;
+      // 左右半邊各自偵測 → 保證每邊各抓到一位玩家（螢幕左=A、右=B）。
+      const armA = pickArm(await pose.readHalf('A'));
+      const armB = pickArm(await pose.readHalf('B'));
+      if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
+      if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
       handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
     }
   }
