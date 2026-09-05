@@ -14,6 +14,7 @@ import { createSelectScreen } from './select-screen.js';
 import { updateHold } from './ready.js';
 import { createLoadingScreen } from './loading.js';
 import { createModeModal } from './mode-modal.js';
+import { preloadTracks } from './preload.js';
 import { sfx } from './sfx.js';
 
 const video = document.getElementById('cam');
@@ -102,7 +103,7 @@ function startPlaying() {
   ended = false;
   media.playTrack(selectedIdx);
   scoreS = { score: 0, combo: 0 };
-  rotL.lastAngle = null; rotR.lastAngle = null;
+  rotA.lastAngle = null; rotB.lastAngle = null; rotS.lastAngle = null;
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
   startTime = performance.now();
   last = startTime;
@@ -121,15 +122,17 @@ function sendStop() {
 async function boot() {
   const loading = createLoadingScreen(hud);
 
-  // 不再預載 109MB 的 MV（改串流，選歌後邊播邊載）→ 開場只等相機 + 辨識模型，超快。
-  loading.status('開啟相機…');
-  await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
+  // 一進網頁就把所有東西載好才能玩：相機 + 全部 MV 大檔（顯示進度）+ 辨識模型。
+  const camP = navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
     .then(async (stream) => { video.srcObject = stream; await video.play(); });
-  loading.progress(0.5);
+  loading.status('載入歌曲影片…');
+  const [, blobs] = await Promise.all([camP, preloadTracks(BUILTIN_TRACKS, (p) => loading.progress(p * 0.9))]);
+  // 換成 blob URL（播放即時、不再重抓）
+  for (const b of blobs) { const t = BUILTIN_TRACKS.find((x) => x.id === b.id); if (t) t.src = b.url; }
 
   loading.status('載入辨識模型…');
   const pose = await createPoseReader(video);
-  loading.progress(0.9);
+  loading.progress(0.95);
 
   settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
 
