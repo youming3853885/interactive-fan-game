@@ -39,19 +39,24 @@ export function createSelectScreen(hud, onPick) {
 
   const $ = (id) => screen.querySelector('#' + id);
 
-  // ---- 底部波形：細長淺青線條，滿版鋪開，依頻譜即時起伏 ----
-  const EQ_BARS = 72;
-  $('ssEq').innerHTML = Array.from({ length: EQ_BARS }).map(() => '<i><b></b></i>').join('');
-  const eqBars = Array.from($('ssEq').querySelectorAll('i')).map((el) => el.querySelector('b'));
+  // ---- 底部波形：分段重複。每段中央=低頻(最高)，往兩側=高頻(漸矮)，全部段落隨頻譜跳 ----
+  const SEG = 8, BPS = 7;               // 段數 × 每段條數
+  const segHalf = (BPS - 1) / 2;
+  $('ssEq').innerHTML = Array.from({ length: SEG })
+    .map(() => `<span class="ss-seg">${'<i><b></b></i>'.repeat(BPS)}</span>`).join('');
+  const eqBars = Array.from($('ssEq').querySelectorAll('b'));
   let analyser = null;
   let freq = null;
   function eqLoop() {
     if (analyser) {
       analyser.getByteFrequencyData(freq);
       const usable = Math.floor(freq.length * 0.7);
-      for (let k = 0; k < EQ_BARS; k++) {
-        const v = freq[Math.floor((k / (EQ_BARS - 1)) * usable)] / 255; // 左低頻→右高頻
-        eqBars[k].style.height = (3 + v * 97) + '%';
+      for (let s = 0; s < SEG; s++) {
+        for (let b = 0; b < BPS; b++) {
+          const freqFrac = Math.abs(b - segHalf) / segHalf; // 0=段中央(低頻) .. 1=段邊(高頻)
+          const v = freq[Math.floor(freqFrac * usable)] / 255;
+          eqBars[s * BPS + b].style.height = (3 + v * 97) + '%';
+        }
       }
     }
     requestAnimationFrame(eqLoop);
@@ -139,8 +144,9 @@ function injectStyle() {
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
   .ss-eq{position:absolute;inset:auto 0 0 0;height:18vh;display:flex;gap:0;align-items:flex-end;
-    justify-content:space-evenly;padding:0 3vw;opacity:.72;pointer-events:none;z-index:0;}
+    justify-content:space-evenly;padding:0 2vw;opacity:.72;pointer-events:none;z-index:0;}
   .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
+  .ss-seg{height:100%;display:flex;align-items:flex-end;gap:4px;}
   .ss-eq i{position:relative;width:3px;height:100%;}
   .ss-eq i b{position:absolute;left:0;right:0;bottom:0;height:3%;border-radius:3px;
     background:linear-gradient(to top,#6fd4ff,#eafaff);box-shadow:0 0 10px #8fe3ffbb,0 0 4px #cdefff;transition:height .05s linear;}

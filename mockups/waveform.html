@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<title>波形 Mockup — 分段重複 中間低頻</title>
+<style>
+  html,body{margin:0;height:100%;background:#0b1020;}
+  body{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:24px;
+    font-family:system-ui,sans-serif;color:#cfe;}
+  .note{position:fixed;top:20px;left:0;right:0;text-align:center;color:#8fb;font-size:14px;opacity:.8;}
+  .stage{width:100%;height:34vh;background:
+    linear-gradient(180deg,transparent,#0e1428);display:flex;align-items:flex-end;
+    justify-content:space-evenly;padding:0 3vw 4vh;box-sizing:border-box;}
+  /* 一個段落 */
+  .seg{height:100%;display:flex;align-items:flex-end;gap:4px;}
+  .seg i{width:3px;border-radius:3px;height:6%;
+    background:linear-gradient(to top,#6fd4ff,#eafaff);
+    box-shadow:0 0 10px #8fe3ffbb,0 0 4px #cdefff;}
+  .ctrl{margin-bottom:20px;}
+  button{background:#1b2340;color:#cfe;border:1px solid #3a4a80;border-radius:8px;padding:8px 16px;cursor:pointer;}
+</style>
+</head>
+<body>
+  <div class="note">分段重複波形：每段中間＝低頻(最高)，往兩側＝高頻(漸矮)；整排段落一起隨音樂律動</div>
+  <div class="stage" id="stage"></div>
+  <div class="ctrl">
+    段數 <button onclick="setSeg(-1)">−</button> <span id="segN">6</span> <button onclick="setSeg(1)">＋</button>
+    ｜每段條數 <button onclick="setBar(-2)">−</button> <span id="barN">9</span> <button onclick="setBar(2)">＋</button>
+  </div>
+<script>
+  let SEG = 6, BPS = 9;
+  const stage = document.getElementById('stage');
+  let bars = [];
+
+  function build(){
+    stage.innerHTML = '';
+    bars = [];
+    for(let s=0;s<SEG;s++){
+      const seg = document.createElement('div'); seg.className='seg';
+      for(let b=0;b<BPS;b++){
+        const i=document.createElement('i'); seg.appendChild(i); bars.push({el:i, b});
+      }
+      stage.appendChild(seg);
+    }
+    document.getElementById('segN').textContent=SEG;
+    document.getElementById('barN').textContent=BPS;
+  }
+  function setSeg(d){ SEG=Math.max(2,SEG+d); build(); }
+  function setBar(d){ BPS=Math.max(3,BPS+d); build(); }
+
+  const half = ()=> (BPS-1)/2;
+  let t=0;
+  function frame(){
+    t+=0.05;
+    for(const {el,b} of bars){
+      const freqFrac = Math.abs(b-half())/half();     // 0=段中央(低頻) .. 1=段邊(高頻)
+      const base = Math.pow(1-freqFrac, 1.6);          // 低頻能量高
+      const wob = 0.55 + 0.45*Math.abs(Math.sin(t + b*0.7 + freqFrac*3));
+      el.style.height = (6 + base*wob*94) + '%';
+    }
+    requestAnimationFrame(frame);
+  }
+  build(); frame();
+</script>
+</body>
+</html>
