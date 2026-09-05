@@ -37,3 +37,32 @@ describe('higherScore', () => {
     expect(higherScore(30, 30)).toBe(null);
   });
 });
+
+import { scoreStepSingle, gradeFor } from './score.js';
+
+describe('scoreStepSingle', () => {
+  const T = 2 * Math.PI;
+  it('兩手都做對且合拍 → 滿速加分', () => {
+    const r = scoreStepSingle({ score: 0, combo: 0 }, 'F', T, T, 0.1, 120, SCORE_CFG);
+    expect(r.score).toBeCloseTo(16);
+  });
+  it('只一手做對 → 半速', () => {
+    const r = scoreStepSingle({ score: 0, combo: 0 }, 'F', T, -T, 0.1, 120, SCORE_CFG);
+    expect(r.score).toBeCloseTo(8);
+  });
+  it('都沒做對 → combo 歸零、不加分', () => {
+    expect(scoreStepSingle({ score: 50, combo: 3 }, 'F', -T, -T, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 0 });
+  });
+  it('休息段 → 保留 combo', () => {
+    expect(scoreStepSingle({ score: 50, combo: 3 }, 'S', T, T, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 3 });
+  });
+});
+describe('gradeFor', () => {
+  it('依正規化比例給 S/A/B/C', () => {
+    const R = 100;
+    expect(gradeFor(R * 120 * 1.6, 120, SCORE_CFG)).toBe('S');
+    expect(gradeFor(R * 120 * 1.0, 120, SCORE_CFG)).toBe('A');
+    expect(gradeFor(R * 120 * 0.6, 120, SCORE_CFG)).toBe('B');
+    expect(gradeFor(R * 120 * 0.2, 120, SCORE_CFG)).toBe('C');
+  });
+});
