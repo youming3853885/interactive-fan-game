@@ -270,9 +270,10 @@ async function loop(pose) {
           const mult = comboMultiplier(st.combo, SCORE_CFG);
           const leveled = mult > st.mult; st.mult = mult;
           ui.judge(j, pts, mult, cx, cy, color);
-          sfx.hit(mult >= 3);
-          if (leveled) { sfx.comboBurst(mult); sfx.voice('Combo'); }
-          else sfx.voice(j === 'PERFECT' ? 'Perfect' : j === 'GREAT' ? 'Great' : 'Good');
+          sfx.hit(mult >= 3);                              // 每圈遊戲打點音（GOOD 只有這個）
+          if (leveled) sfx.comboBurst(mult);              // combo 升級＝遊戲音效，不喊語音
+          if (j === 'PERFECT') sfx.voice('Perfect');       // 只有 PERFECT/GREAT 喊真人語音
+          else if (j === 'GREAT') sfx.voice('Great');
         }
       }
       return { markerAngle: st.mAng, active: st.active };

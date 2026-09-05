@@ -55,7 +55,7 @@ export const sfx = {
 const voiceClips = {};
 try {
   const base = import.meta.env.BASE_URL;
-  for (const w of ['good', 'great', 'perfect', 'combo']) {
+  for (const w of ['great', 'perfect']) { // 只有這兩級用真人語音；GOOD/COMBO 用遊戲音效
     const a = new Audio();
     a.preload = 'auto'; a.volume = 0.95;
     a.src = base + `voice/${w}.mp3`;
