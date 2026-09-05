@@ -85,4 +85,5 @@ export function createSettingsPanel(hud, settings, media) {
   render();
 
   hud.append(gear, panel);
+  return { gear, panel };
 }

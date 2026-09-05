@@ -88,6 +88,7 @@ export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTrack
   // 供設定畫面即時套用變更
   return {
     tracks,
+    root: wrap,
     playTrack(i) { loadTrack(i, true); },
     applySettings() {
       applyCameraOpacity();

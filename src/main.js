@@ -22,9 +22,9 @@ const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
 
-// ---- 頂部工具列：連接 Arduino（可選，沒有也能玩）----
+// ---- 連接 Arduino（在選歌畫面設定；進遊戲後退場）----
 const bar = document.createElement('div');
-bar.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;';
+bar.style.cssText = 'position:absolute;top:10px;left:12px;display:flex;gap:8px;z-index:6;';
 const btn = document.createElement('button');
 btn.textContent = '連接 Arduino（可選）';
 const simLog = document.createElement('span');
@@ -32,6 +32,14 @@ simLog.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;align-se
 simLog.textContent = '示範模式（無需 Arduino）';
 bar.append(btn, simLog);
 hud.appendChild(bar);
+
+// 這三個控制項只在選歌畫面顯示，遊戲中全退場
+let sp = null;
+function showControls(v) {
+  bar.style.display = v ? 'flex' : 'none';
+  if (sp) { sp.gear.style.display = v ? 'block' : 'none'; if (!v) sp.panel.style.display = 'none'; }
+  if (media) media.root.style.display = v ? 'flex' : 'none';
+}
 
 let sender = simSender((line) => { simLog.textContent = line; });
 btn.addEventListener('click', async () => {
@@ -113,11 +121,14 @@ async function boot() {
   }
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
-  createSettingsPanel(hud, settings, media);
+  media.root.style.zIndex = 6;
+  sp = createSettingsPanel(hud, settings, media);
+  sp.gear.style.zIndex = 6; sp.panel.style.zIndex = 6;
   selectScreen = createSelectScreen(hud, (idx, mode) => {
     selectedIdx = idx;
     lenMode = mode;
     selectScreen.hide();
+    showControls(false);
     startReady();
   });
 
@@ -125,6 +136,7 @@ async function boot() {
   loading.hide();
   phase = 'select';
   selectScreen.show(media.tracks);
+  showControls(true);
   loop(pose);
 }
 
@@ -206,7 +218,7 @@ async function loop(pose) {
       sendStop();
       const who = higherScore(scoreA.score, scoreB.score);
       ui.victory(who, scoreA.score, scoreB.score);
-      setTimeout(() => { selectScreen.show(media.tracks); phase = 'select'; }, 4000);
+      setTimeout(() => { selectScreen.show(media.tracks); showControls(true); phase = 'select'; }, 4000);
     }
   }
   // phase 'loading'/'victory' 時不更新遊戲，等狀態切換
