@@ -20,4 +20,8 @@ export const sfx = {
   hover() { blip(1250, 0.028, 'sine', 0.05); },
   toggle(on) { blip(on ? 760 : 360, 0.09, 'sawtooth', 0.11); },
   confirm() { [523, 659, 784, 1047].forEach((f, k) => setTimeout(() => blip(f, 0.12, 'triangle', 0.14), k * 65)); },
+  comboBurst(tier) {
+    const base = 440 * Math.pow(1.12, tier);
+    [0, 80, 160].forEach((d, k) => setTimeout(() => blip(base * (1 + k * 0.25), 0.12, 'square', 0.16), d));
+  },
 };
