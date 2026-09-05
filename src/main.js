@@ -13,7 +13,6 @@ import { createSettingsPanel } from './settings-panel.js';
 import { createSelectScreen } from './select-screen.js';
 import { updateHold } from './ready.js';
 import { createLoadingScreen } from './loading.js';
-import { preloadTracks } from './preload.js';
 import { createModeModal } from './mode-modal.js';
 import { sfx } from './sfx.js';
 
@@ -114,20 +113,15 @@ function sendStop() {
 async function boot() {
   const loading = createLoadingScreen(hud);
 
-  // 並行：抓相機 + 預載所有 MV 大檔
-  const camP = navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
+  // 不再預載 109MB 的 MV（改串流，選歌後邊播邊載）→ 開場只等相機 + 辨識模型，超快。
+  loading.status('開啟相機…');
+  await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
     .then(async (stream) => { video.srcObject = stream; await video.play(); });
-  const preP = preloadTracks(BUILTIN_TRACKS, (p) => loading.progress(p));
-  const [, blobs] = await Promise.all([camP, preP]);
-
-  // 換成 blob URL（播放即時，不再重抓）
-  for (const b of blobs) {
-    const t = BUILTIN_TRACKS.find((x) => x.id === b.id);
-    if (t) t.src = b.url;
-  }
+  loading.progress(0.5);
 
   loading.status('載入辨識模型…');
   const pose = await createPoseReader(video);
+  loading.progress(0.9);
 
   // 設定（並套用內建預設起播秒數，如超跑情人夢第 5 秒）
   settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
@@ -145,6 +139,7 @@ async function boot() {
   modeModal = createModeModal(hud, (picked) => {
     mode = picked;
     selectScreen.hide(); showControls(false);
+    media.prep(selectedIdx); // 開始緩衝選中的 MV（利用 5 秒 ready 期間邊載）
     startReady();
   });
 

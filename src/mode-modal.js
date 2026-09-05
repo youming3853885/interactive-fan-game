@@ -30,8 +30,8 @@ export function createModeModal(hud, onPick) {
     <div class="mm-card dual" data-mode="dual"><div class="t">雙人</div><div class="d">左右對戰 · 比分數</div></div>`;
   hud.appendChild(back);
   const base = import.meta.env.BASE_URL;
-  back.querySelector('.mm-card.single').style.backgroundImage = `url(${base}modes/single.png)`;
-  back.querySelector('.mm-card.dual').style.backgroundImage = `url(${base}modes/dual.png)`;
+  back.querySelector('.mm-card.single').style.backgroundImage = `url(${base}modes/single.jpg)`;
+  back.querySelector('.mm-card.dual').style.backgroundImage = `url(${base}modes/dual.jpg)`;
 
   const close = () => { back.style.display = 'none'; };
   back.querySelector('.mm-x').addEventListener('click', close);

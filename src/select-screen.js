@@ -44,7 +44,7 @@ export function createSelectScreen(hud, onPick) {
     <div class="ss-dots" id="ssDots"></div>`;
   screen.style.display = 'none';
   hud.appendChild(screen);
-  screen.style.backgroundImage = `url("${import.meta.env.BASE_URL}select-bg.png")`;
+  screen.style.backgroundImage = `url("${import.meta.env.BASE_URL}select-bg.jpg")`;
   screen.style.backgroundSize = 'cover';
   screen.style.backgroundPosition = 'center';
   const lights = createLights(screen);

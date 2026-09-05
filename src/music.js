@@ -38,6 +38,7 @@ export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTrack
 
   return {
     tracks,
+    prep(i) { loadTrack(i, false); }, // 只載入緩衝、不自動播（給 ready 期間預熱）
     playTrack(i) { loadTrack(i, true); },
     applySettings() {
       applyCameraOpacity();

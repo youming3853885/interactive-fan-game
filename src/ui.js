@@ -13,7 +13,7 @@ export function createUI(canvas) {
     3: { chXL: 0.10, chXR: 0.90, chYT: 0.324, chYB: 0.658 }, // 霓虹管
   };
   const barImgs = {};
-  for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.png`; }
+  for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.webp`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
