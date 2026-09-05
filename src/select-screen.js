@@ -145,7 +145,8 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:28vh;display:flex;gap:4px;align-items:flex-end;justify-content:center;opacity:.55;pointer-events:none;}
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:16vh;display:flex;gap:4px;align-items:flex-end;justify-content:center;opacity:.5;pointer-events:none;z-index:0;}
+  .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
   .ss-eq i{position:relative;width:8px;height:100%;}
   .ss-eq i b{position:absolute;left:0;right:0;bottom:0;height:4%;border-radius:4px 4px 0 0;
     background:linear-gradient(to top,#4ec3ff,#ff6b9d);box-shadow:0 0 10px #4ec3ff77,0 0 4px #ff6b9d88;transition:height .05s linear;}
