@@ -5,6 +5,7 @@ export function createUI(canvas) {
   const ctx = canvas.getContext('2d');
   const particles = [];
   const colorA = '#2b7bff', colorB = '#ff3b3b'; // 左藍 右紅（固定）
+  const gold = '#ffd76b';
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   const SCHOOL = '🏫 澎湖縣湖西鄉龍門國民小學 · 畫圈對決';
@@ -41,28 +42,68 @@ export function createUI(canvas) {
     ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
-  function drawTube(xFrac, score, comboMult, color, label, icon) {
-    const W = canvas.width, H = canvas.height;
-    const bw = W * 0.035, bh = H * 0.6, x = xFrac * W - bw / 2, y = H * 0.2;
-    ctx.fillStyle = color; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(icon, xFrac * W, y - H * 0.05);
-    ctx.strokeStyle = color + 'aa'; ctx.lineWidth = 3;
-    roundRectPath(x, y, bw, bh, bw / 2); ctx.stroke();
-    const frac = Math.max(0, Math.min(1, score / 3000));
-    ctx.save(); roundRectPath(x, y, bw, bh, bw / 2); ctx.clip();
-    const cells = 12, gap = bh * 0.012, ch = (bh - gap * (cells - 1)) / cells;
-    const lit = Math.round(frac * cells);
-    for (let i = 0; i < lit; i++) {
-      ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 12;
-      const cy = y + bh - (i + 1) * ch - i * gap;
-      ctx.fillRect(x, cy, bw, ch);
+  // 音樂遊戲風「實心」能量條：深玻璃外殼 + 玩家色實心漸層填充 + 分段細縫 + 前緣發光。
+  // o = { x, y, w, h, frac, score, comboMult, label, color, showLR, lActive, rActive }
+  function gaugePalette(color) {
+    if (color === colorB) return ['#6b0f1f', '#ff3b3b', '#ffb59a'];
+    return ['#0b2a6b', '#2b7bff', '#a6e4ff']; // 預設藍
+  }
+  function drawGauge(o) {
+    const { x, y, w, h } = o;
+    const frac = Math.max(0, Math.min(1, o.frac));
+    const r = h * 0.5;
+    // 外殼：深色玻璃 + 玩家色邊框光
+    ctx.save();
+    roundRectPath(x, y, w, h, r);
+    ctx.fillStyle = '#0a0e1ad9'; ctx.fill();
+    ctx.lineWidth = Math.max(2, h * 0.10); ctx.strokeStyle = o.color || '#5bd6ff';
+    ctx.shadowColor = o.color || '#5bd6ff'; ctx.shadowBlur = 18; ctx.stroke();
+    ctx.restore();
+    // 內軌
+    const pad = h * 0.20, ix = x + pad, iy = y + pad, iw = w - pad * 2, ih = h - pad * 2, ir = ih * 0.5;
+    ctx.save();
+    roundRectPath(ix, iy, iw, ih, ir); ctx.clip();
+    ctx.fillStyle = '#05070f'; ctx.fillRect(ix, iy, iw, ih);
+    const fw = iw * frac;
+    if (fw > 0) {
+      const [c0, c1, c2] = gaugePalette(o.color);
+      const g = ctx.createLinearGradient(ix, 0, ix + iw, 0);
+      g.addColorStop(0, c0); g.addColorStop(0.55, c1); g.addColorStop(1, c2);
+      ctx.save();
+      ctx.shadowColor = o.color || c1; ctx.shadowBlur = 20;
+      ctx.fillStyle = g; ctx.fillRect(ix, iy, fw, ih);           // 實心填充
+      ctx.restore();
+      ctx.fillStyle = '#ffffff30'; ctx.fillRect(ix, iy, fw, ih * 0.38); // 頂部高光
+      // 前緣亮線
+      ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 16;
+      ctx.fillStyle = '#ffffffee'; ctx.fillRect(ix + fw - Math.max(2, h * 0.04), iy, Math.max(2, h * 0.06), ih);
+      ctx.restore();
     }
-    ctx.restore(); ctx.shadowBlur = 0;
-    ctx.fillStyle = color; ctx.font = `900 ${Math.round(H * 0.03)}px system-ui`;
-    ctx.fillText(`${label} ${Math.round(score)}`, xFrac * W, y + bh + H * 0.04);
-    ctx.fillStyle = '#ffd76b'; ctx.font = `900 ${Math.round(H * 0.035)}px system-ui`;
-    ctx.fillText(`🔥x${comboMult}`, xFrac * W, y + bh + H * 0.09);
+    // 分段細縫（科技感）：等距暗色直縫切過整條
+    const segW = ih * 0.9, gaps = Math.max(6, Math.round(iw / segW));
+    ctx.fillStyle = '#00000066';
+    for (let i = 1; i < gaps; i++) ctx.fillRect(ix + (iw / gaps) * i - h * 0.015, iy, Math.max(1, h * 0.03), ih);
+    ctx.restore();
+    // 兩端 L / R 指示燈（僅單人）
+    if (o.showLR) {
+      for (const [cx, on, col, txt] of [[x + r, o.lActive, colorA, 'L'], [x + w - r, o.rActive, colorR, 'R']]) {
+        const cyy = y + h * 0.5, rr = h * 0.30;
+        ctx.save();
+        if (on) { ctx.shadowColor = col; ctx.shadowBlur = 26; ctx.fillStyle = col; } else ctx.fillStyle = '#0a0e1a';
+        ctx.beginPath(); ctx.arc(cx, cyy, rr, 0, Math.PI * 2); ctx.fill();
+        ctx.lineWidth = 2; ctx.strokeStyle = on ? '#fff' : '#334'; ctx.stroke(); ctx.restore();
+        ctx.fillStyle = on ? '#fff' : '#8891b5'; ctx.font = `900 ${Math.round(h * 0.34)}px system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, cx, cyy);
+      }
+    }
+    // 分數 + Combo（條上方）
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.7)}px system-ui`;
+    ctx.fillText(`${o.label} ${Math.round(o.score)}`, x + w * 0.5, y - h * 0.35);
+    if (o.comboMult > 1) {
+      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.6)}px system-ui`;
+      ctx.fillText(`🔥x${o.comboMult}`, x + w * 0.85, y - h * 0.35);
+    }
   }
 
   function resize() {
@@ -101,10 +142,14 @@ export function createUI(canvas) {
   function drawHand(pt, color) {
     if (!pt) return;
     const H = canvas.height;
-    ctx.beginPath(); ctx.arc(pt.x, pt.y, H * 0.032, 0, Math.PI * 2);
-    ctx.fillStyle = color + '44'; ctx.fill();
-    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.stroke();
-    ctx.font = `${Math.round(H * 0.05)}px system-ui`;
+    ctx.save();
+    // 深色底環 + 發光，讓手在花俏 MV 上仍清楚
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, H * 0.064, 0, Math.PI * 2);
+    ctx.fillStyle = '#00000066'; ctx.fill();
+    ctx.shadowColor = color; ctx.shadowBlur = 24;
+    ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.stroke();
+    ctx.restore();
+    ctx.font = `${Math.round(H * 0.10)}px system-ui`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('🖐', pt.x, pt.y);
   }
@@ -112,15 +157,22 @@ export function createUI(canvas) {
   // 最上層：畫圓運動導引。虛線圓 = 要畫的軌跡；亮點沿圓移動 = 該畫的方向。
   function drawGuide(center, radius, dir, color) {
     ctx.save();
-    ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 4; ctx.setLineDash([12, 12]);
+    // 1) 深色襯底環（實線、較粗）→ 不論 MV 多花都看得到圈
+    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = 14;
+    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
+    // 2) 彩色虛線圈 + 發光疊在上面
+    ctx.shadowColor = color; ctx.shadowBlur = 20;
+    ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.setLineDash([16, 14]);
     ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
+    // 3) 沿圈移動的方向亮點（大顆 + 深色描邊 + 發光）
     const sign = dir === 'R' ? -1 : 1; // F 順時針、R 逆時針
     const ang = guidePhase * sign;
     const mx = center.x + radius * Math.cos(ang), my = center.y + radius * Math.sin(ang);
-    ctx.shadowColor = color; ctx.shadowBlur = 16;
-    ctx.fillStyle = color;
-    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.02, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 26;
+    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.032, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.shadowBlur = 0; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
     ctx.restore();
   }
 
@@ -129,33 +181,6 @@ export function createUI(canvas) {
       const ang = (i / 3) * Math.PI * 2 + x; // 用 x 擾動，避免 Math.random 依賴
       particles.push({ x, y, vx: Math.cos(ang) * 4, vy: Math.sin(ang) * 4, life: 1, color });
     }
-  }
-
-  function drawBar(xFrac, energy, color, label) {
-    const W = canvas.width, H = canvas.height;
-    const bw = W * 0.05, bh = H * 0.7;
-    const x = xFrac * W - bw / 2, y = H * 0.15;
-    ctx.strokeStyle = '#fff6'; ctx.lineWidth = 3;
-    ctx.strokeRect(x, y, bw, bh);
-    const fill = (energy / 100) * bh;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y + bh - fill, bw, fill);
-    ctx.fillStyle = '#fff'; ctx.font = `${Math.round(H * 0.03)}px system-ui`;
-    ctx.textAlign = 'center';
-    ctx.fillText(`${label} ${Math.round(energy)}%`, xFrac * W, y + bh + H * 0.05);
-  }
-
-  function drawArrow(xFrac, dir, color) {
-    const W = canvas.width, H = canvas.height;
-    const cx = xFrac * W, cy = H * 0.1, r = H * 0.05;
-    ctx.strokeStyle = color; ctx.lineWidth = 6;
-    ctx.beginPath();
-    // dir 'F' 順時針弧、'R' 逆時針弧
-    ctx.arc(cx, cy, r, 0, Math.PI * 1.5, dir === 'R');
-    ctx.stroke();
-    ctx.fillStyle = color; ctx.font = `${Math.round(H * 0.06)}px system-ui`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(dir === 'F' ? '↻' : '↺', cx, cy);
   }
 
   // 準備階段：分隔 + 每側方塊 + 揮手/放手提示 + 5秒進度。
@@ -272,7 +297,7 @@ export function createUI(canvas) {
     render(state) {
       const W = canvas.width, H = canvas.height;
       ctx.clearRect(0, 0, W, H);
-      drawDivider();
+      if (state.mode !== 'single') drawDivider(); // 單人不分左右
       drawSchool();
       const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '⏸ 休息';
       centerText(glyph, 0.12, 0.08, '#fff');
@@ -281,24 +306,27 @@ export function createUI(canvas) {
         centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
       }
       centerText(`⏱ ${Math.ceil(state.timeLeft)}s`, 0.05, 0.03, '#fff');
-      const R = Math.min(W, H) * 0.16;
       guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
+      const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
       if (state.mode === 'single') {
-        drawTube(0.5, state.score, state.comboMult, colorA, 'YOU', '🕹️');
-        if (state.segDir !== 'S') {
-          drawGuide({ x: W * 0.35, y: H * 0.5 }, R, state.segDir, colorA);
-          drawGuide({ x: W * 0.65, y: H * 0.5 }, R, state.segDir, colorB);
-        }
+        // 單一大導引圓（雙手共用）
+        const R = Math.min(W, H) * 0.26;
+        if (state.segDir !== 'S') drawGuide({ x: W * 0.5, y: H * 0.42 }, R, state.segDir, gold);
         drawHand(state.handL, colorA); drawHand(state.handR, colorB);
-        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.4, colorA, state.comboMult); flash(colorA); }
+        drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.10, color: colorA,
+          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult,
+          label: 'YOU', showLR: true, lActive: state.lActive, rActive: state.rActive });
+        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.42, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
-        drawTube(0.06, state.A.score, state.A.comboMult, colorA, 'A', '🕹️');
-        drawTube(0.94, state.B.score, state.B.comboMult, colorB, 'B', '🎮');
-        for (const [side, color, cx] of [['A', colorA, 0.25], ['B', colorB, 0.75]]) {
-          if (state.segDir !== 'S') drawGuide({ x: cx * W, y: H * 0.5 }, R, state.segDir, color);
+        const R = Math.min(W, H) * 0.2;
+        for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
+          if (state.segDir !== 'S') drawGuide({ x: cx * W, y: H * 0.42 }, R, state.segDir, color);
           drawHand(state[side].hand, color);
-          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.4, color, state[side].comboMult); flash(color); }
+          drawGauge({ x: gx * W, y: H * 0.85, w: W * 0.44, h: H * 0.09,
+            frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
+            label: side, color, showLR: false });
+          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.42, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }
       }

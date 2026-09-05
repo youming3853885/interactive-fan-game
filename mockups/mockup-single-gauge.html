@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>能量條 Mockup（實心・科技感）</title>
+<style>
+  body{margin:0;background:#0a0b12;color:#e7ecff;font-family:system-ui,"Segoe UI",sans-serif;}
+  .wrap{max-width:980px;margin:0 auto;padding:24px 16px 60px;}
+  h1{font-size:22px;text-align:center;letter-spacing:.05em;}
+  .sub{text-align:center;color:#8b93bd;font-size:13px;margin-top:-8px}
+  .row{margin:26px 0}
+  .tag{font-size:14px;font-weight:800;letter-spacing:.06em;padding:4px 12px;border-radius:999px;display:inline-block;margin-bottom:8px;background:#12432a;color:#8effc0}
+  canvas{width:100%;aspect-ratio:16/9;display:block;border-radius:14px;border:1px solid #ffffff1a;background:#000}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>底部橫向能量條（實心・音樂遊戲科技感）</h1>
+  <div class="sub">深玻璃外殼 + 玩家色實心漸層填充 + 分段細縫 + 前緣白光</div>
+  <div class="row"><span class="tag">單人（含 L/R 指示燈）</span><canvas id="single"></canvas></div>
+  <div class="row"><span class="tag">雙人（A 藍 / B 紅，無 L/R）</span><canvas id="dual"></canvas></div>
+</div>
+<script>
+const colorA='#2b7bff', colorR='#ff3b3b', gold='#ffd76b';
+function bg(ctx,W,H){const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#1a1030');g.addColorStop(.5,'#0a0b16');g.addColorStop(1,'#101a2e');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='#ffffff10';ctx.font=`900 ${H*0.28}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('DEJA VU',W/2,H*0.5);}
+function rr(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function guide(ctx,cx,cy,R,color){ctx.save();ctx.strokeStyle='#000000aa';ctx.lineWidth=14;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();ctx.shadowColor=color;ctx.shadowBlur=20;ctx.strokeStyle=color;ctx.lineWidth=7;ctx.setLineDash([16,14]);ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();ctx.restore();}
+function pal(color){return color===colorR?['#6b0f1f','#ff3b3b','#ffb59a']:['#0b2a6b','#2b7bff','#a6e4ff'];}
+function drawGauge(ctx,o){const{x,y,w,h}=o;const frac=Math.max(0,Math.min(1,o.frac));const r=h*0.5;
+  ctx.save();rr(ctx,x,y,w,h,r);ctx.fillStyle='#0a0e1ad9';ctx.fill();ctx.lineWidth=Math.max(2,h*0.10);ctx.strokeStyle=o.color||'#5bd6ff';ctx.shadowColor=o.color||'#5bd6ff';ctx.shadowBlur=18;ctx.stroke();ctx.restore();
+  const pad=h*0.20,ix=x+pad,iy=y+pad,iw=w-pad*2,ih=h-pad*2,ir=ih*0.5;
+  ctx.save();rr(ctx,ix,iy,iw,ih,ir);ctx.clip();ctx.fillStyle='#05070f';ctx.fillRect(ix,iy,iw,ih);
+  const fw=iw*frac;
+  if(fw>0){const[c0,c1,c2]=pal(o.color);const g=ctx.createLinearGradient(ix,0,ix+iw,0);g.addColorStop(0,c0);g.addColorStop(0.55,c1);g.addColorStop(1,c2);
+    ctx.save();ctx.shadowColor=o.color||c1;ctx.shadowBlur=20;ctx.fillStyle=g;ctx.fillRect(ix,iy,fw,ih);ctx.restore();
+    ctx.fillStyle='#ffffff30';ctx.fillRect(ix,iy,fw,ih*0.38);
+    ctx.save();ctx.shadowColor='#fff';ctx.shadowBlur=16;ctx.fillStyle='#ffffffee';ctx.fillRect(ix+fw-Math.max(2,h*0.04),iy,Math.max(2,h*0.06),ih);ctx.restore();}
+  const segW=ih*0.9,gaps=Math.max(6,Math.round(iw/segW));ctx.fillStyle='#00000066';
+  for(let i=1;i<gaps;i++)ctx.fillRect(ix+(iw/gaps)*i-h*0.015,iy,Math.max(1,h*0.03),ih);
+  ctx.restore();
+  if(o.showLR){for(const[cx,on,col,txt]of[[x+r,o.lActive,colorA,'L'],[x+w-r,o.rActive,colorR,'R']]){const cyy=y+h*0.5,rrr=h*0.30;ctx.save();if(on){ctx.shadowColor=col;ctx.shadowBlur=26;ctx.fillStyle=col;}else ctx.fillStyle='#0a0e1a';ctx.beginPath();ctx.arc(cx,cyy,rrr,0,7);ctx.fill();ctx.lineWidth=2;ctx.strokeStyle=on?'#fff':'#334';ctx.stroke();ctx.restore();ctx.fillStyle=on?'#fff':'#8891b5';ctx.font=`900 ${Math.round(h*0.34)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,cx,cyy);}}
+  ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle=o.color||'#fff';ctx.font=`900 ${Math.round(h*0.7)}px system-ui`;ctx.fillText(`${o.label} ${Math.round(o.score)}`,x+w*0.5,y-h*0.35);
+  if(o.comboMult>1){ctx.fillStyle=gold;ctx.font=`900 ${Math.round(h*0.6)}px system-ui`;ctx.fillText(`🔥x${o.comboMult}`,x+w*0.85,y-h*0.35);}}
+function frame(id,fn){const c=document.getElementById(id);c.width=c.clientWidth;c.height=c.clientWidth*9/16;const ctx=c.getContext('2d');bg(ctx,c.width,c.height);fn(ctx,c.width,c.height);}
+let t=0;
+function tick(){t+=0.016;const frac=(Math.sin(t)*0.5+0.5)*0.85+0.1;
+ frame('single',(ctx,W,H)=>{const R=Math.min(W,H)*0.26;guide(ctx,W*0.5,H*0.42,R,gold);drawGauge(ctx,{x:W*0.09,y:H*0.80,w:W*0.82,h:H*0.10,color:colorA,frac,score:frac*3000,comboMult:3,label:'YOU',showLR:true,lActive:Math.sin(t*2)>-0.3,rActive:Math.sin(t*2+1)>-0.3});});
+ frame('dual',(ctx,W,H)=>{const R=Math.min(W,H)*0.2;ctx.fillStyle='#2b7bff14';ctx.fillRect(0,0,W/2,H);ctx.fillStyle='#ff3b3b14';ctx.fillRect(W/2,0,W/2,H);guide(ctx,W*0.25,H*0.42,R,colorA);guide(ctx,W*0.75,H*0.42,R,colorR);
+   drawGauge(ctx,{x:W*0.04,y:H*0.85,w:W*0.44,h:H*0.09,color:colorA,frac,score:frac*3000,comboMult:2,label:'A'});
+   drawGauge(ctx,{x:W*0.52,y:H*0.85,w:W*0.44,h:H*0.09,color:colorR,frac:frac*0.7,score:frac*0.7*3000,comboMult:1,label:'B'});});
+ requestAnimationFrame(tick);}
+tick();
+</script>
+</body>
+</html>

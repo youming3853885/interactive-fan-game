@@ -211,8 +211,10 @@ async function loop(pose) {
       sender.send(formatCommand(
         { ...fa, energy: Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100) },
         { ...fb, energy: Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100) })).catch(() => {});
+      const active = (om, hand) => segDir === 'S' ? !!hand : segDir === 'F' ? om > CONFIG.deadzone : om < -CONFIG.deadzone;
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
-        score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), handL, handR });
+        score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), handL, handR,
+        lActive: active(omegaL, handL), rActive: active(omegaR, handR) });
       if (!ended && elapsed >= roundSec) {
         ended = true; phase = 'victory'; sendStop(); mvVideo.pause();
         ui.victory({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, SCORE_CFG) });
