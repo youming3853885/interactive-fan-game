@@ -8,6 +8,8 @@ import { createMusicWidget } from './music.js';
 import { BUILTIN_TRACKS } from './tracks.js';
 import { loadSettings } from './settings.js';
 import { createSettingsPanel } from './settings-panel.js';
+import { createSelectScreen } from './select-screen.js';
+import { updateHold } from './ready.js';
 
 const video = document.getElementById('cam');
 const mvVideo = document.getElementById('mv');
@@ -21,13 +23,14 @@ const settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
 const media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
 createSettingsPanel(hud, settings, media);
 
-// ---- 頂部工具列：連接 Arduino / sim 狀態 ----
+// ---- 頂部工具列：連接 Arduino（可選，沒有也能玩）----
 const bar = document.createElement('div');
 bar.style.cssText = 'position:absolute;top:8px;left:50%;transform:translateX(-50%);display:flex;gap:8px;';
 const btn = document.createElement('button');
-btn.textContent = '連接 Arduino';
+btn.textContent = '連接 Arduino（可選）';
 const simLog = document.createElement('span');
 simLog.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;align-self:center;';
+simLog.textContent = '示範模式（無需 Arduino）';
 bar.append(btn, simLog);
 hud.appendChild(bar);
 
@@ -37,30 +40,58 @@ btn.addEventListener('click', async () => {
   catch (e) { alert(e.message); }
 });
 
-// ---- 狀態 ----
+// ---- 選音樂畫面 ----
+const selectScreen = createSelectScreen(hud, (i) => {
+  media.playTrack(i);
+  selectScreen.hide();
+  startReady();
+});
+
+// ---- 遊戲狀態 ----
+const READY_NEED = 5; // 手放進方塊需維持秒數
+let phase = 'select'; // select | ready | playing | victory
 const chA = { ...initChannel('F') };
 const chB = { ...initChannel('R') };
 const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
+const readyState = { need: READY_NEED, A: { hold: 0, ready: false }, B: { hold: 0, ready: false } };
 let done = null;
 let last = performance.now();
 
 const rng = () => Math.random();
+
+function startReady() {
+  readyState.A = { hold: 0, ready: false };
+  readyState.B = { hold: 0, ready: false };
+  phase = 'ready';
+}
+
+function startPlaying() {
+  Object.assign(chA, initChannel('F'));
+  Object.assign(chB, initChannel('R'));
+  done = null;
+  last = performance.now();
+  phase = 'playing';
+}
+
+function sendStop() {
+  sender.send(formatCommand({ dir: 'S', pwm: 0, energy: 0 }, { dir: 'S', pwm: 0, energy: 0 })).catch(() => {});
+}
 
 async function boot() {
   const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
   video.srcObject = stream;
   await video.play();
   const pose = await createPoseReader(video);
+  selectScreen.show(media.tracks); // 先選音樂
   loop(pose);
 }
 
 // 把 pose 座標（半張畫面像素）換算成 overlay canvas 像素（含左右鏡像）。
 function toCanvas(pt, side) {
   const halfW = video.videoWidth / 2;
-  // 畫面 CSS 有 scaleX(-1) 鏡像；A=左半、B=右半
   const xInFull = (side === 'A' ? 0 : halfW) + pt.x;
-  const fx = video.videoWidth - xInFull; // 鏡像
+  const fx = video.videoWidth - xInFull; // CSS scaleX(-1) 鏡像
   return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
 }
 
@@ -87,32 +118,48 @@ async function loop(pose) {
     handB = toCanvas(armB.wrist, 'B');
   } else { rotB.lastAngle = null; }
 
-  Object.assign(chA, updateChannel(chA, omegaA, dt, CONFIG, rng));
-  Object.assign(chB, updateChannel(chB, omegaB, dt, CONFIG, rng));
+  if (phase === 'select') {
+    ui.clear();
+    sendStop();
+  } else if (phase === 'ready') {
+    const hitA = ui.boxHit(handA, 'A');
+    const hitB = ui.boxHit(handB, 'B');
+    readyState.A = { ...updateHold(readyState.A.hold, hitA, dt, READY_NEED), };
+    readyState.B = { ...updateHold(readyState.B.hold, hitB, dt, READY_NEED), };
+    ui.drawReady({
+      need: READY_NEED,
+      A: { hand: handA, hold: readyState.A.hold, ready: readyState.A.ready },
+      B: { hand: handB, hold: readyState.B.hold, ready: readyState.B.ready },
+    });
+    sendStop();
+    if (readyState.A.ready && readyState.B.ready) startPlaying();
+  } else if (phase === 'playing') {
+    Object.assign(chA, updateChannel(chA, omegaA, dt, CONFIG, rng));
+    Object.assign(chB, updateChannel(chB, omegaB, dt, CONFIG, rng));
 
-  const fa = fanCommand(omegaA, CONFIG);
-  const fb = fanCommand(omegaB, CONFIG);
-  sender.send(formatCommand(
-    { ...fa, energy: chA.energy },
-    { ...fb, energy: chB.energy },
-  )).catch(() => {});
+    const fa = fanCommand(omegaA, CONFIG);
+    const fb = fanCommand(omegaB, CONFIG);
+    sender.send(formatCommand(
+      { ...fa, energy: chA.energy },
+      { ...fb, energy: chB.energy },
+    )).catch(() => {});
 
-  ui.render({
-    A: { energy: chA.energy, requiredDir: chA.requiredDir, hand: handA },
-    B: { energy: chB.energy, requiredDir: chB.requiredDir, hand: handB },
-  });
+    ui.render({
+      A: { energy: chA.energy, requiredDir: chA.requiredDir, hand: handA },
+      B: { energy: chB.energy, requiredDir: chB.requiredDir, hand: handB },
+    });
 
-  if (!done) {
     done = winner(chA, chB, CONFIG);
-    if (done) { ui.victory(done); setTimeout(reset, 4000); }
+    if (done) {
+      ui.victory(done);
+      phase = 'victory';
+      sendStop();
+      setTimeout(() => { selectScreen.show(media.tracks); phase = 'select'; }, 4000);
+    }
   }
-  requestAnimationFrame(() => loop(pose));
-}
+  // phase === 'victory' 時畫面停在勝利，等 timeout 回選單
 
-function reset() {
-  Object.assign(chA, initChannel('F'));
-  Object.assign(chB, initChannel('R'));
-  done = null;
+  requestAnimationFrame(() => loop(pose));
 }
 
 boot().catch((e) => alert('啟動失敗：' + e.message));

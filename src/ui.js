@@ -1,7 +1,10 @@
+import { boxFor, pointInBox } from './ready.js';
+
 // 全部畫在 overlay canvas 上。座標系用 canvas 像素。
 export function createUI(canvas) {
   const ctx = canvas.getContext('2d');
   const particles = [];
+  const colorA = '#4ec3ff', colorB = '#ff6b9d';
 
   function resize() {
     canvas.width = canvas.clientWidth;
@@ -9,6 +12,24 @@ export function createUI(canvas) {
   }
   resize();
   window.addEventListener('resize', resize);
+
+  // 左右分隔：中央亮線 + 兩側極淡色調，讓左右邊界一目了然。
+  function drawDivider() {
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = colorA + '14'; ctx.fillRect(0, 0, W / 2, H);
+    ctx.fillStyle = colorB + '14'; ctx.fillRect(W / 2, 0, W / 2, H);
+    ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 3;
+    ctx.setLineDash([14, 12]);
+    ctx.beginPath(); ctx.moveTo(W / 2, 0); ctx.lineTo(W / 2, H); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  function centerText(text, yFrac, sizeFrac, color) {
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = color; ctx.font = `bold ${Math.round(H * sizeFrac)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, W / 2, H * yFrac);
+  }
 
   function spawnParticles(x, y, color) {
     for (let i = 0; i < 3; i++) {
@@ -44,11 +65,54 @@ export function createUI(canvas) {
     ctx.fillText(dir === 'F' ? '↻' : '↺', cx, cy);
   }
 
+  // 準備階段：分隔 + 每側方塊 + 揮手/放手提示 + 5秒進度。
+  // state = { need, A:{hand, hold, ready}, B:{...} }
+  function drawReady(state) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    drawDivider();
+    centerText('兩位玩家站定位，把手放進方塊維持 5 秒開始', 0.08, 0.035, '#fff');
+    for (const [side, color] of [['A', colorA], ['B', colorB]]) {
+      const s = state[side];
+      const box = boxFor(side, W, H);
+      // 側邊提示文字
+      ctx.fillStyle = color; ctx.font = `bold ${Math.round(H * 0.03)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const cx = side === 'A' ? W * 0.25 : W * 0.75;
+      if (!s.hand) {
+        ctx.fillText('👋 揮手讓鏡頭看到你', cx, H * 0.4);
+      } else {
+        // 方塊
+        ctx.strokeStyle = s.ready ? '#5dff9b' : color; ctx.lineWidth = 5;
+        ctx.strokeRect(box.x, box.y, box.w, box.h);
+        // 由下往上填進度
+        const f = (s.hold / state.need) * box.h;
+        ctx.fillStyle = (s.ready ? '#5dff9b' : color) + '66';
+        ctx.fillRect(box.x, box.y + box.h - f, box.w, f);
+        // 手的位置點
+        ctx.fillStyle = color;
+        ctx.beginPath(); ctx.arc(s.hand.x, s.hand.y, 12, 0, Math.PI * 2); ctx.fill();
+        const remain = Math.ceil(state.need - s.hold);
+        ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(H * 0.05)}px system-ui`;
+        ctx.fillText(s.ready ? 'OK ✓' : `把手放進方塊 ${remain}`, cx, box.y - H * 0.05);
+      }
+    }
+  }
+
+  function clear() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
   return {
+    drawReady,
+    clear,
+    boxHit(hand, side) {
+      return hand ? pointInBox(hand, boxFor(side, canvas.width, canvas.height)) : false;
+    },
     // state = { A:{energy,requiredDir,hand}, B:{...} }；hand = {wrist} 或 null
     render(state) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const colorA = '#4ec3ff', colorB = '#ff6b9d';
+      drawDivider();
       drawBar(0.06, state.A.energy, colorA, 'A');
       drawBar(0.94, state.B.energy, colorB, 'B');
       drawArrow(0.2, state.A.requiredDir, colorA);
