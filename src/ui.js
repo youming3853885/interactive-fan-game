@@ -32,6 +32,13 @@ export function createUI(canvas) {
     ctx.fillText(text, W / 2, H * yFrac);
   }
 
+  function centerTextAt(xFrac, yFrac, text, sizeFrac, color) {
+    const W = canvas.width, H = canvas.height;
+    ctx.fillStyle = color; ctx.font = `bold ${Math.round(H * sizeFrac)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, W * xFrac, H * yFrac);
+  }
+
   // 玩家手部：手腕位置畫手掌圖示 + 側色光環，方便知道手在哪。
   function drawHand(pt, color) {
     if (!pt) return;
@@ -137,16 +144,27 @@ export function createUI(canvas) {
     boxHit(hand, side) {
       return hand ? pointInBox(hand, boxFor(side, canvas.width, canvas.height)) : false;
     },
-    // state = { A:{energy,requiredDir,hand}, B:{...} }；hand = {wrist} 或 null
+    // state = { timeLeft, segDir, nextDir, nextIn, guideOmega,
+    //           A:{score, comboMult, hand, shoulder}, B:{...} }
     render(state) {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const W = canvas.width, H = canvas.height;
       drawDivider();
-      drawBar(0.06, state.A.energy, colorA, 'A');
-      drawBar(0.94, state.B.energy, colorB, 'B');
-      drawArrow(0.2, state.A.requiredDir, colorA);
-      drawArrow(0.8, state.B.requiredDir, colorB);
 
-      // 手上噴粒子（座標需主迴圈換算成 canvas 像素後傳入）
+      const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '⏸ 休息';
+      centerText(glyph, 0.12, 0.08, '#fff');
+      if (state.nextDir) {
+        const nn = state.nextDir === 'F' ? '正轉' : state.nextDir === 'R' ? '反轉' : '休息';
+        centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
+      }
+      centerText(`⏱ ${Math.ceil(state.timeLeft)}s`, 0.05, 0.03, '#fff');
+
+      const frac = (v) => Math.max(0, Math.min(1, v / 3000));
+      drawBar(0.06, frac(state.A.score) * 100, colorA, `A  ${Math.round(state.A.score)}`);
+      drawBar(0.94, frac(state.B.score) * 100, colorB, `B  ${Math.round(state.B.score)}`);
+      centerTextAt(0.2, 0.9, `x${state.A.comboMult}`, 0.045, colorA);
+      centerTextAt(0.8, 0.9, `x${state.B.comboMult}`, 0.045, colorB);
+
       for (const [side, color] of [['A', colorA], ['B', colorB]]) {
         const h = state[side].hand;
         if (h) spawnParticles(h.x, h.y, color);
@@ -160,24 +178,27 @@ export function createUI(canvas) {
       }
       ctx.globalAlpha = 1;
 
-      // 最上層：畫圓導引圓 + 方向標記 + 手掌圖示
-      guidePhase = (guidePhase + 0.06) % (Math.PI * 2);
-      const R = Math.min(canvas.width, canvas.height) * 0.16;
+      guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
+      const R = Math.min(W, H) * 0.16;
       for (const [side, color] of [['A', colorA], ['B', colorB]]) {
         const s = state[side];
-        const center = s.shoulder || { x: (side === 'A' ? 0.25 : 0.75) * canvas.width, y: canvas.height * 0.5 };
-        drawGuide(center, R, s.requiredDir, color);
+        const center = s.shoulder || { x: (side === 'A' ? 0.25 : 0.75) * W, y: H * 0.5 };
+        if (state.segDir !== 'S') drawGuide(center, R, state.segDir, color);
         drawHand(s.hand, color);
       }
     },
 
-    victory(who) {
+    victory(who, scoreA, scoreB) {
       ctx.fillStyle = '#000a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = who === 'A' ? colorA : colorB;
-      ctx.font = `${Math.round(canvas.height * 0.12)}px system-ui`;
+      ctx.fillStyle = who === 'A' ? colorA : who === 'B' ? colorB : '#fff';
+      ctx.font = `${Math.round(canvas.height * 0.1)}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(`玩家 ${who} 勝利！`, canvas.width / 2, canvas.height / 2);
+      const title = who ? `玩家 ${who} 勝利！` : '平手！';
+      ctx.fillText(title, canvas.width / 2, canvas.height * 0.42);
+      ctx.font = `${Math.round(canvas.height * 0.05)}px system-ui`;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(`A ${Math.round(scoreA)}  :  ${Math.round(scoreB)} B`, canvas.width / 2, canvas.height * 0.56);
     },
   };
 }
