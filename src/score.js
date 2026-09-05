@@ -6,7 +6,7 @@ export const SCORE_CFG = {
   tempoBonus: 1.6,
   tempoLo: 0.6,
   tempoHi: 1.6,
-  comboStep: 3,
+  comboStep: 2,
   comboMax: 5,
   revsPerBeat: 0.5,
   scoreForFullBar: 3000,
@@ -28,7 +28,7 @@ export function scoreStep(state, segDir, omega, dt, bpm, cfg) {
   if (segDir === 'S' || segDir == null) return { score, combo };
   const dir = direction(omega, cfg.deadzone);
   const correct = dir !== 'S' && dir === segDir;
-  if (!correct) return { score, combo: 0 };
+  if (!correct) return { score, combo }; // 做錯只暫停累積，不歸零 combo
   const target = targetOmegaFor(bpm, cfg);
   const mag = Math.abs(omega);
   const onTempo = mag >= cfg.tempoLo * target && mag <= cfg.tempoHi * target;
@@ -42,22 +42,6 @@ export function higherScore(a, b) {
   if (a > b) return 'A';
   if (b > a) return 'B';
   return null;
-}
-
-export function scoreStepSingle(state, segDir, omegaL, omegaR, dt, bpm, cfg) {
-  let { score, combo } = state;
-  if (segDir === 'S' || segDir == null) return { score, combo };
-  const dl = direction(omegaL, cfg.deadzone), dr = direction(omegaR, cfg.deadzone);
-  const cL = dl !== 'S' && dl === segDir, cR = dr !== 'S' && dr === segDir;
-  const n = (cL ? 1 : 0) + (cR ? 1 : 0);
-  if (n === 0) return { score, combo: 0 };
-  combo += dt;
-  const mag = Math.max(cL ? Math.abs(omegaL) : 0, cR ? Math.abs(omegaR) : 0);
-  const target = targetOmegaFor(bpm, cfg);
-  const onTempo = mag >= cfg.tempoLo * target && mag <= cfg.tempoHi * target;
-  const tempoMult = onTempo ? cfg.tempoBonus : 1;
-  score += cfg.baseRate * dt * (n / 2) * tempoMult * comboMultiplier(combo, cfg);
-  return { score, combo };
 }
 
 export function gradeFor(score, roundSec, cfg) {

@@ -19,6 +19,33 @@ export function createUI(canvas) {
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
   const bursts = [];
   let prevCombo = { A: 1, B: 1, S: 1 };
+  // 得分手感：每累積 FLOAT_STEP 分就從得分處噴一個「+N」上浮字
+  const floaters = [];
+  const FLOAT_STEP = 100;
+  const scoreAcc = { S: 0, A: 0, B: 0 }, prevScoreVal = { S: 0, A: 0, B: 0 };
+  function scoreJuice(key, score, x, y, color) {
+    const prev = prevScoreVal[key]; prevScoreVal[key] = score;
+    if (score < prev) { scoreAcc[key] = 0; return; } // 新局歸零
+    scoreAcc[key] += score - prev;
+    let n = 0;
+    while (scoreAcc[key] >= FLOAT_STEP && n < 3) { // 單幀最多噴 3 個避免爆量
+      scoreAcc[key] -= FLOAT_STEP; n++;
+      floaters.push({ x: x + ((floaters.length % 3) - 1) * canvas.width * 0.02, y, vy: -canvas.height * 0.012, life: 1, color, text: '+' + FLOAT_STEP });
+    }
+  }
+  function drawFloaters() {
+    const H = canvas.height;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = floaters.length - 1; i >= 0; i--) {
+      const f = floaters[i]; f.y += f.vy; f.life -= 0.02;
+      if (f.life <= 0) { floaters.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.min(1, f.life * 1.5);
+      ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`;
+      ctx.lineWidth = 5; ctx.strokeStyle = '#05070f'; ctx.strokeText(f.text, f.x, f.y);
+      ctx.fillStyle = f.color; ctx.shadowColor = f.color; ctx.shadowBlur = 14; ctx.fillText(f.text, f.x, f.y); ctx.shadowBlur = 0;
+    }
+    ctx.globalAlpha = 1;
+  }
   function drawSchool() {
     ctx.fillStyle = '#dfe6ff'; ctx.font = `${Math.round(canvas.height * 0.022)}px system-ui`;
     ctx.textAlign = 'left'; ctx.textBaseline = 'top';
@@ -276,81 +303,51 @@ export function createUI(canvas) {
     }
   }
 
-  // 單人左右手目標圈座標（draw 與 hit-test 共用），回傳 canvas 像素。
+  // 單人單一中央目標圈座標（draw 與 hit-test 共用），回傳 canvas 像素。
   function singleTargets() {
-    const W = canvas.width, H = canvas.height, cx = W / 2;
-    return { r: H * 0.08, L: { x: cx - W * 0.20, y: H * 0.30 }, R: { x: cx + W * 0.20, y: H * 0.30 } };
+    const W = canvas.width, H = canvas.height;
+    return { r: H * 0.12, C: { x: W / 2, y: H * 0.44 } };
   }
-  // 手是否放進對應目標圈（容忍 1.3×半徑）。
-  function handInTarget(hand, side) {
+  // 手是否放進中央目標圈（容忍 1.3×半徑）。
+  function handInTarget(hand) {
     if (!hand) return false;
-    const t = singleTargets(), c = side === 'L' ? t.L : t.R;
-    return Math.hypot(hand.x - c.x, hand.y - c.y) <= t.r * 1.3;
+    const t = singleTargets();
+    return Math.hypot(hand.x - t.C.x, hand.y - t.C.y) <= t.r * 1.3;
   }
 
-  // 單人準備：不分割，中央虛線人形輪廓 + 左右手目標圈；雙手都放進圈內才倒數。
-  // state = { need, hold, ready, handL, handR }
+  // 單人準備：中央一個目標圈，單手放進圈內維持 5 秒開始。
+  // state = { need, hold, ready, hand }
   function drawReadySingle(state) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-    centerText('把左右手分別放進兩個圈圈，維持 5 秒開始', 0.08, 0.032, '#fff');
+    ctx.fillStyle = 'rgba(4,5,12,0.55)'; ctx.fillRect(0, 0, W, H);
+    centerText('把一隻手放進中央圈圈，維持 5 秒開始', 0.10, 0.034, '#fff');
 
-    const cx = W / 2;
-    const headY = H * 0.30, headR = H * 0.055;
-    const shoulderY = H * 0.40, hipY = H * 0.64;
-    const t = singleTargets();
-    const handLx = t.L.x, handRx = t.R.x, handY = t.L.y;
-
-    // 虛線人形輪廓
+    const t = singleTargets(), cx = t.C.x, cy = t.C.y, inTgt = handInTarget(state.hand);
+    // 目標圈
     ctx.save();
-    ctx.setLineDash([14, 12]);
-    ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.arc(cx, headY, headR, 0, Math.PI * 2);               // 頭
-    ctx.moveTo(cx, headY + headR); ctx.lineTo(cx, hipY);      // 軀幹
-    ctx.moveTo(cx, shoulderY); ctx.lineTo(handLx, handY);     // 左臂舉高
-    ctx.moveTo(cx, shoulderY); ctx.lineTo(handRx, handY);     // 右臂舉高
-    ctx.moveTo(cx, hipY); ctx.lineTo(cx - W * 0.06, H * 0.84);// 左腿
-    ctx.moveTo(cx, hipY); ctx.lineTo(cx + W * 0.06, H * 0.84);// 右腿
-    ctx.stroke();
+    ctx.beginPath(); ctx.arc(cx, cy, t.r, 0, Math.PI * 2);
+    if (inTgt) { ctx.fillStyle = colorA + '44'; ctx.fill(); ctx.shadowColor = colorA; ctx.shadowBlur = 34; }
+    ctx.setLineDash(inTgt ? [] : [12, 10]);
+    ctx.strokeStyle = inTgt ? colorA : '#ffffffaa'; ctx.lineWidth = inTgt ? 8 : 5; ctx.stroke();
     ctx.restore();
 
-    // 左右手目標圈：手放進圈內才點亮
-    const lIn = handInTarget(state.handL, 'L'), rIn = handInTarget(state.handR, 'R');
-    for (const [inTgt, hx, color, label] of [[lIn, handLx, colorA, '左手'], [rIn, handRx, colorB, '右手']]) {
-      ctx.beginPath(); ctx.arc(hx, handY, t.r, 0, Math.PI * 2);
-      ctx.save();
-      if (inTgt) { ctx.fillStyle = color + '55'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 30; }
-      ctx.setLineDash(inTgt ? [] : [10, 8]);
-      ctx.strokeStyle = inTgt ? color : '#ffffff88'; ctx.lineWidth = inTgt ? 6 : 4; ctx.stroke();
-      ctx.restore();
-      ctx.fillStyle = inTgt ? color : '#ffffffaa'; ctx.font = `bold ${Math.round(H * 0.026)}px system-ui`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(inTgt ? label + ' 就位' : '把' + label + '放進來', hx, handY + t.r + H * 0.04);
-    }
-
-    // 雙手都就位 → 大倒數（軀幹中央）
-    const bothOn = lIn && rIn;
+    // 倒數 / 提示
     const remain = Math.max(0, Math.ceil(state.need - state.hold));
-    const label = state.ready ? 'GO!' : (bothOn ? String(remain) : '');
+    const label = state.ready ? 'GO!' : (inTgt ? String(remain) : '');
     if (label) {
-      const my = (shoulderY + hipY) / 2;
-      const big = state.ready ? H * 0.22 : H * 0.30; // 數字比 GO! 更大
-      // 深色圓底 + 環，讓數字在花俏 MV 上超清楚
-      ctx.save();
-      ctx.beginPath(); ctx.arc(cx, my, big * 0.72, 0, Math.PI * 2);
-      ctx.fillStyle = '#05070fcc'; ctx.fill();
-      ctx.lineWidth = 8; ctx.strokeStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 30; ctx.stroke();
-      ctx.restore();
+      const big = state.ready ? H * 0.16 : H * 0.22;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.font = `900 ${Math.round(big)}px system-ui`;
-      ctx.lineWidth = 10; ctx.strokeStyle = '#05070f'; ctx.strokeText(label, cx, my);
-      ctx.fillStyle = '#fff'; ctx.fillText(label, cx, my);
+      ctx.lineWidth = 10; ctx.strokeStyle = '#05070f'; ctx.strokeText(label, cx, cy);
+      ctx.fillStyle = '#fff'; ctx.shadowColor = gold; ctx.shadowBlur = 24; ctx.fillText(label, cx, cy); ctx.shadowBlur = 0;
+    } else {
+      ctx.fillStyle = '#ffffffcc'; ctx.font = `bold ${Math.round(H * 0.03)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('把手移進來', cx, cy);
     }
 
-    // 實際手部亮點
-    drawHand(state.handL, colorA);
-    drawHand(state.handR, colorB);
+    drawHand(state.hand, colorA); // 實際手部亮點
   }
 
   function clear() {
@@ -379,24 +376,25 @@ export function createUI(canvas) {
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
       if (state.mode === 'single') {
-        // 圓心大旋轉箭頭（正轉藍/反轉紅），無外圈
+        // 圓心大旋轉箭頭（正轉藍/反轉紅），無外圈；單手
         const R = Math.min(W, H) * 0.26;
-        dirArrow({ x: W * 0.5, y: H * 0.48 }, R, state.segDir, state.segDir === 'R' ? colorB : colorA);
-        drawHand(state.handL, colorA); drawHand(state.handR, colorB);
+        dirArrow({ x: W * 0.5, y: H * 0.44 }, R, state.segDir, state.segDir === 'R' ? colorB : colorA);
+        drawHand(state.hand, colorA);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
-          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult,
-          label: 'YOU', showLR: true, lActive: state.lActive, rActive: state.rActive });
-        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.48, gold, state.comboMult); flash(colorA); }
+          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult, label: 'YOU', showLR: false });
+        scoreJuice('S', state.score, W * 0.5, H * 0.72, gold);
+        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.42, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
         const R = Math.min(W, H) * 0.22;
         for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
-          dirArrow({ x: cx * W, y: H * 0.48 }, R, state.segDir, color); // 各側玩家色大箭頭
+          dirArrow({ x: cx * W, y: H * 0.44 }, R, state.segDir, color); // 各側玩家色大箭頭
           drawHand(state[side].hand, color);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
             frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
             label: side, showLR: false });
-          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.48, color, state[side].comboMult); flash(color); }
+          scoreJuice(side, state[side].score, cx * W, H * 0.74, color);
+          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.42, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }
       }
@@ -407,6 +405,7 @@ export function createUI(canvas) {
         ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
+      drawFloaters();
       drawBursts();
     },
 

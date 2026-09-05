@@ -22,8 +22,8 @@ describe('scoreStep', () => {
     expect(r.combo).toBeCloseTo(0.1);
     expect(r.score).toBeCloseTo(16);
   });
-  it('方向錯 → combo 歸零、不加分', () => {
-    expect(scoreStep({ score: 50, combo: 2 }, 'F', -6, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 0 });
+  it('方向錯 → 只暫停(保留 combo)、不加分', () => {
+    expect(scoreStep({ score: 50, combo: 2 }, 'F', -6, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 2 });
   });
   it('做對但不合拍(轉太快) → 只給基礎分(無加成)', () => {
     const r = scoreStep({ score: 0, combo: 0 }, 'F', 50, 0.1, 120, SCORE_CFG);
@@ -38,25 +38,8 @@ describe('higherScore', () => {
   });
 });
 
-import { scoreStepSingle, gradeFor } from './score.js';
+import { gradeFor } from './score.js';
 
-describe('scoreStepSingle', () => {
-  const T = 2 * Math.PI;
-  it('兩手都做對且合拍 → 滿速加分', () => {
-    const r = scoreStepSingle({ score: 0, combo: 0 }, 'F', T, T, 0.1, 120, SCORE_CFG);
-    expect(r.score).toBeCloseTo(16);
-  });
-  it('只一手做對 → 半速', () => {
-    const r = scoreStepSingle({ score: 0, combo: 0 }, 'F', T, -T, 0.1, 120, SCORE_CFG);
-    expect(r.score).toBeCloseTo(8);
-  });
-  it('都沒做對 → combo 歸零、不加分', () => {
-    expect(scoreStepSingle({ score: 50, combo: 3 }, 'F', -T, -T, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 0 });
-  });
-  it('休息段 → 保留 combo', () => {
-    expect(scoreStepSingle({ score: 50, combo: 3 }, 'S', T, T, 0.1, 120, SCORE_CFG)).toEqual({ score: 50, combo: 3 });
-  });
-});
 describe('gradeFor', () => {
   it('依正規化比例給 S/A/B/C', () => {
     const R = 100;

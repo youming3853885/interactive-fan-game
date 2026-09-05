@@ -1,7 +1,7 @@
 import { wristAngle, trackRotation } from './motion.js';
 import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
-import { SCORE_CFG, scoreStep, scoreStepSingle, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, scoreStep, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars } from './tracks.js';
 import { formatCommand } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
@@ -62,10 +62,9 @@ let scoreB = { score: 0, combo: 0 };
 let scoreS = { score: 0, combo: 0 };
 const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
-const rotL = { lastAngle: null };
-const rotR = { lastAngle: null };
+const rotS = { lastAngle: null }; // 單人單手
 // 手部顯示平滑（EMA 去抖，只影響畫面亮點/就位判定，不影響轉速計分）
-const smA = { x: null, y: null, miss: 0 }, smB = { x: null, y: null, miss: 0 }, smL = { x: null, y: null, miss: 0 }, smR = { x: null, y: null, miss: 0 };
+const smA = { x: null, y: null, miss: 0 }, smB = { x: null, y: null, miss: 0 }, smS = { x: null, y: null, miss: 0 };
 const SMOOTH = 0.3;  // 越小越穩但越延遲
 const COAST = 10;    // 偵測掉幀時最多沿用上一位置的幀數（避免閃爍）
 function smoothPoint(s, pt, a) {
@@ -151,15 +150,7 @@ async function boot() {
   loop(pose);
 }
 
-// 把 pose 座標（半張畫面像素）換算成 overlay canvas 像素（含左右鏡像）。
-function toCanvas(pt, side) {
-  const halfW = video.videoWidth / 2;
-  // 對應 pose.js 的半邊對調：A=原始右半、B=原始左半
-  const xInFull = (side === 'A' ? halfW : 0) + pt.x;
-  const fx = video.videoWidth - xInFull; // CSS scaleX(-1) 鏡像
-  return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
-}
-
+// 把 pose 全畫面座標換算成 overlay canvas 像素（含左右鏡像）。
 function toCanvasFull(pt) {
   const fx = video.videoWidth - pt.x; // 鏡像
   return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
@@ -170,22 +161,24 @@ async function loop(pose) {
   const dt = Math.min((now - last) / 1000, 0.1);
   last = now;
 
-  let handA = null, handB = null, handL = null, handR = null;
-  let omegaA = 0, omegaB = 0, omegaL = 0, omegaR = 0;
-  if (mode === 'single' && phase !== 'select') {
-    const f = await pose.readFull();
-    const pickL = f && f.leftWrist && f.leftShoulder && f.leftWrist.score > 0.25 ? { wrist: f.leftWrist, shoulder: f.leftShoulder } : null;
-    const pickR = f && f.rightWrist && f.rightShoulder && f.rightWrist.score > 0.25 ? { wrist: f.rightWrist, shoulder: f.rightShoulder } : null;
-    if (pickL) { const ang = wristAngle(pickL.wrist, pickL.shoulder); const r = trackRotation(rotL, ang, dt); rotL.lastAngle = r.state.lastAngle; omegaL = r.omega; handL = toCanvasFull(pickL.wrist); } else rotL.lastAngle = null;
-    if (pickR) { const ang = wristAngle(pickR.wrist, pickR.shoulder); const r = trackRotation(rotR, ang, dt); rotR.lastAngle = r.state.lastAngle; omegaR = r.omega; handR = toCanvasFull(pickR.wrist); } else rotR.lastAngle = null;
-    handL = smoothPoint(smL, handL, SMOOTH); handR = smoothPoint(smR, handR, SMOOTH);
-    handA = handL; handB = handR;
-  } else {
-    const { A, B } = await pose.read();
-    const armA = pickArm(A), armB = pickArm(B);
-    if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
-    if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
-    handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
+  let handA = null, handB = null, handS = null;
+  let omegaA = 0, omegaB = 0, omegaS = 0;
+  if (phase !== 'select') {
+    const people = await pose.readPeople();
+    if (mode === 'single') {
+      // 單手：抓信心最高那個人、他較活躍的那隻手
+      const person = people.slice().sort((a, b) => (b.score || 0) - (a.score || 0))[0] || null;
+      const arm = pickArm(person);
+      if (arm) { const ang = wristAngle(arm.wrist, arm.shoulder); const r = trackRotation(rotS, ang, dt); rotS.lastAngle = r.state.lastAngle; omegaS = r.omega; handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
+      handS = smoothPoint(smS, handS, SMOOTH);
+    } else {
+      // 依中心 x 分左右：畫面鏡像 → 原始 x 大者在螢幕左(=A 藍)
+      const two = people.slice().sort((a, b) => b.midX - a.midX);
+      const armA = pickArm(two[0] || null), armB = pickArm(two[1] || null);
+      if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvasFull(armA.wrist); } else rotA.lastAngle = null;
+      if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvasFull(armB.wrist); } else rotB.lastAngle = null;
+      handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
+    }
   }
 
   if (phase === 'select') {
@@ -193,9 +186,9 @@ async function loop(pose) {
     sendStop();
   } else if (phase === 'ready') {
     if (mode === 'single') {
-      const both = ui.handInTarget(handL, 'L') && ui.handInTarget(handR, 'R');
-      readyState.A = { ...updateHold(readyState.A.hold, both, dt, READY_NEED) };
-      ui.drawReadySingle({ need: READY_NEED, hold: readyState.A.hold, ready: readyState.A.ready, handL, handR });
+      const inTgt = ui.handInTarget(handS);
+      readyState.A = { ...updateHold(readyState.A.hold, inTgt, dt, READY_NEED) };
+      ui.drawReadySingle({ need: READY_NEED, hold: readyState.A.hold, ready: readyState.A.ready, hand: handS });
       if (readyState.A.ready) startPlaying();
     } else {
       const hitA = ui.boxHit(handA, 'A'), hitB = ui.boxHit(handB, 'B');
@@ -212,16 +205,13 @@ async function loop(pose) {
     const segDir = current ? current.dir : 'S';
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
     if (mode === 'single') {
-      scoreS = scoreStepSingle(scoreS, segDir, omegaL, omegaR, dt, bpm, SCORE_CFG);
-      const fa = fanCommand(omegaL, CONFIG), fb = fanCommand(omegaR, CONFIG);
-      sender.send(formatCommand(
-        { ...fa, energy: Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100) },
-        { ...fb, energy: Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100) })).catch(() => {});
-      const active = (om, hand) => segDir === 'S' ? !!hand : segDir === 'F' ? om > CONFIG.deadzone : om < -CONFIG.deadzone;
+      scoreS = scoreStep(scoreS, segDir, omegaS, dt, bpm, SCORE_CFG);
+      const fs = fanCommand(omegaS, CONFIG);
+      const energy = Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100);
+      sender.send(formatCommand({ ...fs, energy }, { ...fs, energy })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle,
-        score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), handL, handR,
-        lActive: active(omegaL, handL), rActive: active(omegaR, handR) });
+        score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), hand: handS });
       if (!ended && elapsed >= roundSec) {
         ended = true; phase = 'victory'; sendStop(); mvVideo.pause();
         ui.victory({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, SCORE_CFG) });
