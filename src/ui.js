@@ -7,6 +7,64 @@ export function createUI(canvas) {
   const colorA = '#2b7bff', colorB = '#ff3b3b'; // 左藍 右紅（固定）
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
+  const SCHOOL = '🏫 澎湖縣湖西鄉龍門國民小學 · 畫圈對決';
+  const bursts = [];
+  let prevCombo = { A: 1, B: 1, S: 1 };
+  function drawSchool() {
+    ctx.fillStyle = '#dfe6ff'; ctx.font = `${Math.round(canvas.height * 0.022)}px system-ui`;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    ctx.fillText(SCHOOL, canvas.width * 0.012, canvas.height * 0.02);
+  }
+  function triggerBurst(cx, cy, color, mult) {
+    bursts.push({ x: cx, y: cy, color, mult, life: 1 });
+    for (let i = 0; i < 16; i++) { const a = (i / 16) * Math.PI * 2; particles.push({ x: cx, y: cy, vx: Math.cos(a) * 9, vy: Math.sin(a) * 9, life: 1, color }); }
+    if (api.onComboBurst) api.onComboBurst(mult);
+  }
+  function drawBursts() {
+    for (let i = bursts.length - 1; i >= 0; i--) {
+      const b = bursts[i]; b.life -= 0.02; b.y -= 2;
+      if (b.life <= 0) { bursts.splice(i, 1); continue; }
+      ctx.globalAlpha = b.life; ctx.fillStyle = b.color;
+      ctx.font = `900 ${Math.round(canvas.height * 0.08)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(`COMBO x${b.mult}!`, b.x, b.y);
+      ctx.globalAlpha = 1;
+    }
+  }
+  function flash(color) {
+    ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = color;
+    ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.restore();
+  }
+  function roundRectPath(x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
+  function drawTube(xFrac, score, comboMult, color, label, icon) {
+    const W = canvas.width, H = canvas.height;
+    const bw = W * 0.035, bh = H * 0.6, x = xFrac * W - bw / 2, y = H * 0.2;
+    ctx.fillStyle = color; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(icon, xFrac * W, y - H * 0.05);
+    ctx.strokeStyle = color + 'aa'; ctx.lineWidth = 3;
+    roundRectPath(x, y, bw, bh, bw / 2); ctx.stroke();
+    const frac = Math.max(0, Math.min(1, score / 3000));
+    ctx.save(); roundRectPath(x, y, bw, bh, bw / 2); ctx.clip();
+    const cells = 12, gap = bh * 0.012, ch = (bh - gap * (cells - 1)) / cells;
+    const lit = Math.round(frac * cells);
+    for (let i = 0; i < lit; i++) {
+      ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 12;
+      const cy = y + bh - (i + 1) * ch - i * gap;
+      ctx.fillRect(x, cy, bw, ch);
+    }
+    ctx.restore(); ctx.shadowBlur = 0;
+    ctx.fillStyle = color; ctx.font = `900 ${Math.round(H * 0.03)}px system-ui`;
+    ctx.fillText(`${label} ${Math.round(score)}`, xFrac * W, y + bh + H * 0.04);
+    ctx.fillStyle = '#ffd76b'; ctx.font = `900 ${Math.round(H * 0.035)}px system-ui`;
+    ctx.fillText(`🔥x${comboMult}`, xFrac * W, y + bh + H * 0.09);
+  }
+
   function resize() {
     canvas.width = canvas.clientWidth;
     canvas.height = canvas.clientHeight;
@@ -146,19 +204,18 @@ export function createUI(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
-  return {
+  const api = {
     drawReady,
     clear,
+    onComboBurst: null,
     boxHit(hand, side) {
       return hand ? pointInBox(hand, boxFor(side, canvas.width, canvas.height)) : false;
     },
-    // state = { timeLeft, segDir, nextDir, nextIn, guideOmega,
-    //           A:{score, comboMult, hand, shoulder}, B:{...} }
     render(state) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
       const W = canvas.width, H = canvas.height;
+      ctx.clearRect(0, 0, W, H);
       drawDivider();
-
+      drawSchool();
       const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '⏸ 休息';
       centerText(glyph, 0.12, 0.08, '#fff');
       if (state.nextDir) {
@@ -166,47 +223,56 @@ export function createUI(canvas) {
         centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
       }
       centerText(`⏱ ${Math.ceil(state.timeLeft)}s`, 0.05, 0.03, '#fff');
-
-      const frac = (v) => Math.max(0, Math.min(1, v / 3000));
-      drawBar(0.06, frac(state.A.score) * 100, colorA, `A  ${Math.round(state.A.score)}`);
-      drawBar(0.94, frac(state.B.score) * 100, colorB, `B  ${Math.round(state.B.score)}`);
-      centerTextAt(0.2, 0.9, `x${state.A.comboMult}`, 0.045, colorA);
-      centerTextAt(0.8, 0.9, `x${state.B.comboMult}`, 0.045, colorB);
-
-      for (const [side, color] of [['A', colorA], ['B', colorB]]) {
-        const h = state[side].hand;
-        if (h) spawnParticles(h.x, h.y, color);
+      const R = Math.min(W, H) * 0.16;
+      guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
+      if (state.mode === 'single') {
+        drawTube(0.5, state.score, state.comboMult, colorA, 'YOU', '🕹️');
+        if (state.segDir !== 'S') {
+          drawGuide({ x: W * 0.35, y: H * 0.5 }, R, state.segDir, colorA);
+          drawGuide({ x: W * 0.65, y: H * 0.5 }, R, state.segDir, colorB);
+        }
+        drawHand(state.handL, colorA); drawHand(state.handR, colorB);
+        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.4, colorA, state.comboMult); flash(colorA); }
+        prevCombo.S = state.comboMult;
+      } else {
+        drawTube(0.06, state.A.score, state.A.comboMult, colorA, 'A', '🕹️');
+        drawTube(0.94, state.B.score, state.B.comboMult, colorB, 'B', '🎮');
+        for (const [side, color, cx] of [['A', colorA, 0.25], ['B', colorB, 0.75]]) {
+          if (state.segDir !== 'S') drawGuide({ x: cx * W, y: H * 0.5 }, R, state.segDir, color);
+          drawHand(state[side].hand, color);
+          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.4, color, state[side].comboMult); flash(color); }
+          prevCombo[side] = state[side].comboMult;
+        }
       }
       for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx; p.y += p.vy; p.life -= 0.04;
+        const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.life -= 0.03;
         if (p.life <= 0) { particles.splice(i, 1); continue; }
         ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
         ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
-
-      guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
-      const R = Math.min(W, H) * 0.16;
-      for (const [side, color] of [['A', colorA], ['B', colorB]]) {
-        const s = state[side];
-        const center = s.shoulder || { x: (side === 'A' ? 0.25 : 0.75) * W, y: H * 0.5 };
-        if (state.segDir !== 'S') drawGuide(center, R, state.segDir, color);
-        drawHand(s.hand, color);
-      }
+      drawBursts();
     },
 
-    victory(who, scoreA, scoreB) {
-      ctx.fillStyle = '#000a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = who === 'A' ? colorA : who === 'B' ? colorB : '#fff';
-      ctx.font = `${Math.round(canvas.height * 0.1)}px system-ui`;
+    victory(result) {
+      ctx.fillStyle = '#000c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const title = who ? `玩家 ${who} 勝利！` : '平手！';
-      ctx.fillText(title, canvas.width / 2, canvas.height * 0.42);
-      ctx.font = `${Math.round(canvas.height * 0.05)}px system-ui`;
-      ctx.fillStyle = '#fff';
-      ctx.fillText(`A ${Math.round(scoreA)}  :  ${Math.round(scoreB)} B`, canvas.width / 2, canvas.height * 0.56);
+      const cx = canvas.width / 2, H = canvas.height;
+      if (result.mode === 'single') {
+        ctx.fillStyle = '#ffd76b'; ctx.font = `900 ${Math.round(H * 0.16)}px system-ui`;
+        ctx.fillText(result.grade, cx, H * 0.4);
+        ctx.fillStyle = '#fff'; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
+        ctx.fillText(`分數 ${Math.round(result.score)}`, cx, H * 0.58);
+      } else {
+        ctx.fillStyle = result.who === 'A' ? colorA : result.who === 'B' ? colorB : '#fff';
+        ctx.font = `900 ${Math.round(H * 0.1)}px system-ui`;
+        ctx.fillText(result.who ? `玩家 ${result.who} 勝利！` : '平手！', cx, H * 0.4);
+        ctx.fillStyle = '#fff'; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
+        ctx.fillText(`A ${Math.round(result.scoreA)} : ${Math.round(result.scoreB)} B`, cx, H * 0.56);
+      }
+      ctx.fillStyle = '#aeb4d8'; ctx.font = `${Math.round(H * 0.025)}px system-ui`;
+      ctx.fillText(SCHOOL, cx, H * 0.7);
     },
   };
+  return api;
 }
