@@ -2,7 +2,7 @@
 
 // 某一側方塊的幾何（canvas 像素）。main 判定手在不在框內、ui 畫框，共用同一組。
 export function boxFor(side, W, H) {
-  const w = Math.min(W, H) * 0.18;
+  const w = Math.min(W, H) * 0.30; // 放大判定框，較好對位
   const cx = side === 'A' ? W * 0.25 : W * 0.75;
   const cy = H * 0.55;
   return { x: cx - w / 2, y: cy - w / 2, w, h: w };

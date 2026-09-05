@@ -180,9 +180,15 @@ async function loop(pose) {
       if (arm) { const ang = wristAngle(arm.wrist, arm.shoulder); const r = trackRotation(rotS, ang, dt); rotS.lastAngle = r.state.lastAngle; omegaS = r.omega; handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
       handS = smoothPoint(smS, handS, SMOOTH);
     } else {
-      // 依中心 x 分左右：畫面鏡像 → 原始 x 大者在螢幕左(=A 藍)
-      const two = people.slice().sort((a, b) => b.midX - a.midX);
-      const armA = pickArm(two[0] || null), armB = pickArm(two[1] || null);
+      // 依玩家「實際所在的螢幕左右半邊」指派：螢幕左=A(藍)、螢幕右=B(紅)。
+      // 畫面鏡像 → 螢幕 x = (videoWidth - midX) 換算；每邊取信心最高的人。
+      let pA = null, pB = null;
+      for (const p of people) {
+        const screenX = (video.videoWidth - p.midX) / video.videoWidth * canvas.width;
+        if (screenX < canvas.width / 2) { if (!pA || (p.score || 0) > (pA.score || 0)) pA = p; }
+        else { if (!pB || (p.score || 0) > (pB.score || 0)) pB = p; }
+      }
+      const armA = pickArm(pA), armB = pickArm(pB);
       if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvasFull(armA.wrist); } else rotA.lastAngle = null;
       if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvasFull(armB.wrist); } else rotB.lastAngle = null;
       handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
