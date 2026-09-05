@@ -1,4 +1,5 @@
 import { sfx } from './sfx.js';
+import { attachAnalyser } from './audio.js';
 import { bpmToStars, starString } from './tracks.js';
 
 // 音樂遊戲風選歌畫面：中央旋轉黑膠 + 唱針、左右封面、切歌箭頭、BPM+難度、試聽、開始。
@@ -37,7 +38,25 @@ export function createSelectScreen(hud, onPick) {
   hud.appendChild(preview);
 
   const $ = (id) => screen.querySelector('#' + id);
-  $('ssEq').innerHTML = Array.from({ length: 48 }).map((_, k) => `<i style="animation-delay:${(k % 12) * 0.08}s"></i>`).join('');
+
+  // ---- 底部波形：接 AnalyserNode，依真實頻譜即時反饋 ----
+  const EQ_BARS = 56;
+  $('ssEq').innerHTML = Array.from({ length: EQ_BARS }).map(() => '<i></i>').join('');
+  const eqBars = Array.from($('ssEq').querySelectorAll('i'));
+  let analyser = null;
+  let freq = null;
+  function eqLoop() {
+    if (analyser) {
+      analyser.getByteFrequencyData(freq);
+      const usable = Math.floor(freq.length * 0.75); // 高頻多半空，取前 3/4
+      for (let k = 0; k < EQ_BARS; k++) {
+        const v = freq[Math.floor((k / EQ_BARS) * usable)] / 255; // 0~1
+        eqBars[k].style.height = (6 + v * 94) + '%';
+      }
+    }
+    requestAnimationFrame(eqLoop);
+  }
+  eqLoop();
 
   let tracks = [];
   let i = 0;
@@ -62,6 +81,10 @@ export function createSelectScreen(hud, onPick) {
   }
 
   function startPreview() {
+    if (!analyser) {
+      analyser = attachAnalyser(preview);
+      freq = new Uint8Array(analyser.frequencyBinCount);
+    }
     preview.src = tracks[i].src;
     preview.play().catch(() => {});
   }
@@ -113,9 +136,8 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:22vh;display:flex;gap:6px;align-items:flex-end;justify-content:center;opacity:.16;pointer-events:none;}
-  .ss-eq i{width:10px;background:linear-gradient(#4ec3ff,#ff6b9d);border-radius:4px 4px 0 0;animation:ssb 1s ease-in-out infinite;}
-  @keyframes ssb{0%,100%{height:12%}50%{height:90%}}
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:24vh;display:flex;gap:5px;align-items:flex-end;justify-content:center;opacity:.32;pointer-events:none;}
+  .ss-eq i{width:8px;height:6%;background:linear-gradient(#4ec3ff,#ff6b9d);border-radius:4px 4px 0 0;transition:height .06s linear;}
   .ss-top{position:absolute;top:26px;text-align:center;}
   .ss-kicker{letter-spacing:.4em;font-size:13px;color:#aeb4d8;}
   .ss-idx{margin-top:6px;font-size:14px;color:#8890b8;}

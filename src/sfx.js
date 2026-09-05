@@ -1,10 +1,9 @@
 // 勁舞團式介面音效：WebAudio 即時合成，免素材檔。
-let ac;
-const actx = () => (ac = ac || new (window.AudioContext || window.webkitAudioContext)());
+import { getAudioContext } from './audio.js';
 
 function blip(freq, dur, type = 'square', vol = 0.14) {
   try {
-    const a = actx();
+    const a = getAudioContext();
     const o = a.createOscillator();
     const g = a.createGain();
     o.type = type; o.frequency.value = freq;
