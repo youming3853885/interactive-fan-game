@@ -1,6 +1,7 @@
 import { sfx } from './sfx.js';
 import { attachAnalyser } from './audio.js';
 import { bpmToStars, starString } from './tracks.js';
+import { createLights } from './lights.js';
 
 export function formatTime(sec) {
   if (!Number.isFinite(sec)) return '--:--';
@@ -43,6 +44,10 @@ export function createSelectScreen(hud, onPick) {
     <div class="ss-dots" id="ssDots"></div>`;
   screen.style.display = 'none';
   hud.appendChild(screen);
+  screen.style.backgroundImage = `url("${import.meta.env.BASE_URL}select-bg.png")`;
+  screen.style.backgroundSize = 'cover';
+  screen.style.backgroundPosition = 'center';
+  const lights = createLights(screen);
 
   const preview = document.createElement('audio');
   hud.appendChild(preview);
@@ -118,6 +123,7 @@ export function createSelectScreen(hud, onPick) {
     const s = tracks[i].start || 0; // 例如超跑情人夢從第 5 秒起
     if (s) preview.addEventListener('loadedmetadata', () => { preview.currentTime = s; }, { once: true });
     preview.play().catch(() => {});
+    lights.setPlaying(true);
   }
   function stopPreview() {
     playing = false;
@@ -125,6 +131,7 @@ export function createSelectScreen(hud, onPick) {
     $('ssDisc').classList.remove('playing');
     $('ssWrap').classList.remove('playing');
     $('ssPreview').textContent = '▶ 試聽';
+    lights.setPlaying(false);
   }
 
   function move(d) { i = (i + d + tracks.length) % tracks.length; sfx.move(d); render(); }
@@ -171,12 +178,11 @@ function injectStyle() {
   s.id = 'ss-style';
   s.textContent = `
   .ss-screen{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
-    radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
+    gap:0;background:#05060d;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:15vh;display:flex;align-items:center;
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:11vh;display:flex;align-items:center;
     justify-content:space-between;padding:0 3vw;opacity:.9;pointer-events:none;z-index:0;}
-  .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
+  .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:3;}
   .ss-col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
   .ss-col span{width:6px;height:6px;border-radius:50%;background:#173a63;transition:background .05s,box-shadow .05s;}
   .ss-col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff,0 0 3px #cdefff;}
