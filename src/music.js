@@ -22,7 +22,8 @@ export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTrack
     videoEl.volume = cfg.volume / 100;
     videoEl.style.opacity = String(cfg.mvOpacity / 100);
     label.textContent = `♪ ${t.name}`;
-    videoEl.currentTime = cfg.start || 0;
+    const seekTo = cfg.start || 0; // 需等 metadata 才能 seek
+    videoEl.addEventListener('loadedmetadata', () => { videoEl.currentTime = seekTo; }, { once: true });
     if (autoplay) videoEl.play().catch(() => {});
   }
 

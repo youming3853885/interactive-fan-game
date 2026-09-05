@@ -4,7 +4,7 @@ const base = import.meta.env.BASE_URL; // GitHub Pages 為 /interactive-fan-game
 export const BUILTIN_TRACKS = [
   { id: 'canon-rock', name: 'Canon Rock', sub: '搖滾電吉他', bpm: 90,
     src: `${base}mv/canon-rock.mp4`, cover: `${base}covers/canon-rock.png` },
-  { id: 'super-run', name: '超跑情人夢', sub: '卜學亮', bpm: 120,
+  { id: 'super-run', name: '超跑情人夢', sub: '卜學亮', bpm: 120, start: 5,
     src: `${base}mv/super-run.mp4`, cover: `${base}covers/super-run.jpg` },
   { id: 'initial-d', name: '頭文字D', sub: 'INITIAL D · Eurobeat', bpm: 150,
     src: `${base}mv/initial-d.mp4`, cover: `${base}covers/initial-d.jpg` },

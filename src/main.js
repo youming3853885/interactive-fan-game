@@ -10,6 +10,8 @@ import { loadSettings } from './settings.js';
 import { createSettingsPanel } from './settings-panel.js';
 import { createSelectScreen } from './select-screen.js';
 import { updateHold } from './ready.js';
+import { createLoadingScreen } from './loading.js';
+import { preloadTracks } from './preload.js';
 
 const video = document.getElementById('cam');
 const mvVideo = document.getElementById('mv');
@@ -17,11 +19,6 @@ const canvas = document.getElementById('overlay');
 const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
-
-// 背景 MV + 設定
-const settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
-const media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
-createSettingsPanel(hud, settings, media);
 
 // ---- 頂部工具列：連接 Arduino（可選，沒有也能玩）----
 const bar = document.createElement('div');
@@ -40,16 +37,11 @@ btn.addEventListener('click', async () => {
   catch (e) { alert(e.message); }
 });
 
-// ---- 選音樂畫面 ----
-const selectScreen = createSelectScreen(hud, (i) => {
-  media.playTrack(i);
-  selectScreen.hide();
-  startReady();
-});
-
 // ---- 遊戲狀態 ----
 const READY_NEED = 5; // 手放進方塊需維持秒數
-let phase = 'select'; // select | ready | playing | victory
+let phase = 'loading'; // loading | select | ready | playing | victory
+let media = null;
+let selectScreen = null;
 const chA = { ...initChannel('F') };
 const chB = { ...initChannel('R') };
 const rotA = { lastAngle: null };
@@ -79,11 +71,42 @@ function sendStop() {
 }
 
 async function boot() {
-  const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
-  video.srcObject = stream;
-  await video.play();
+  const loading = createLoadingScreen(hud);
+
+  // 並行：抓相機 + 預載所有 MV 大檔
+  const camP = navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } })
+    .then(async (stream) => { video.srcObject = stream; await video.play(); });
+  const preP = preloadTracks(BUILTIN_TRACKS, (p) => loading.progress(p));
+  const [, blobs] = await Promise.all([camP, preP]);
+
+  // 換成 blob URL（播放即時，不再重抓）
+  for (const b of blobs) {
+    const t = BUILTIN_TRACKS.find((x) => x.id === b.id);
+    if (t) t.src = b.url;
+  }
+
+  loading.status('載入辨識模型…');
   const pose = await createPoseReader(video);
-  selectScreen.show(media.tracks); // 先選音樂
+
+  // 設定（並套用內建預設起播秒數，如超跑情人夢第 5 秒）
+  const settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
+  for (const t of BUILTIN_TRACKS) {
+    const ps = settings.perTrack[t.id];
+    if (t.start && ps && ps.start === 0) ps.start = t.start;
+  }
+
+  media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
+  createSettingsPanel(hud, settings, media);
+  selectScreen = createSelectScreen(hud, (i) => {
+    media.playTrack(i);
+    selectScreen.hide();
+    startReady();
+  });
+
+  loading.progress(1);
+  loading.hide();
+  phase = 'select';
+  selectScreen.show(media.tracks);
   loop(pose);
 }
 
@@ -124,8 +147,8 @@ async function loop(pose) {
   } else if (phase === 'ready') {
     const hitA = ui.boxHit(handA, 'A');
     const hitB = ui.boxHit(handB, 'B');
-    readyState.A = { ...updateHold(readyState.A.hold, hitA, dt, READY_NEED), };
-    readyState.B = { ...updateHold(readyState.B.hold, hitB, dt, READY_NEED), };
+    readyState.A = { ...updateHold(readyState.A.hold, hitA, dt, READY_NEED) };
+    readyState.B = { ...updateHold(readyState.B.hold, hitB, dt, READY_NEED) };
     ui.drawReady({
       need: READY_NEED,
       A: { hand: handA, hold: readyState.A.hold, ready: readyState.A.ready },
@@ -157,7 +180,7 @@ async function loop(pose) {
       setTimeout(() => { selectScreen.show(media.tracks); phase = 'select'; }, 4000);
     }
   }
-  // phase === 'victory' 時畫面停在勝利，等 timeout 回選單
+  // phase 'loading'/'victory' 時不更新遊戲，等狀態切換
 
   requestAnimationFrame(() => loop(pose));
 }

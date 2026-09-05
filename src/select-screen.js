@@ -39,19 +39,26 @@ export function createSelectScreen(hud, onPick) {
 
   const $ = (id) => screen.querySelector('#' + id);
 
-  // ---- 底部波形：接 AnalyserNode，依真實頻譜即時反饋 ----
-  const EQ_BARS = 56;
-  $('ssEq').innerHTML = Array.from({ length: EQ_BARS }).map(() => '<i></i>').join('');
-  const eqBars = Array.from($('ssEq').querySelectorAll('i'));
+  // ---- 底部波形：音樂遊戲風。中央低頻、向兩側擴散對稱，含峰值頂蓋(peak-hold) ----
+  const EQ_BARS = 64;
+  $('ssEq').innerHTML = Array.from({ length: EQ_BARS }).map(() => '<i><b></b><s></s></i>').join('');
+  const eqBars = Array.from($('ssEq').querySelectorAll('i')).map((el) => ({
+    fill: el.querySelector('b'), cap: el.querySelector('s'),
+  }));
+  const peaks = new Float32Array(EQ_BARS);
+  const half = (EQ_BARS - 1) / 2;
   let analyser = null;
   let freq = null;
   function eqLoop() {
     if (analyser) {
       analyser.getByteFrequencyData(freq);
-      const usable = Math.floor(freq.length * 0.75); // 高頻多半空，取前 3/4
+      const usable = Math.floor(freq.length * 0.7);
       for (let k = 0; k < EQ_BARS; k++) {
-        const v = freq[Math.floor((k / EQ_BARS) * usable)] / 255; // 0~1
-        eqBars[k].style.height = (6 + v * 94) + '%';
+        const frac = Math.abs(k - half) / half;          // 中央=低頻(0)，兩側=高頻(1)
+        const v = freq[Math.floor(frac * usable)] / 255; // 0~1
+        peaks[k] = Math.max(v, peaks[k] - 0.02);          // 峰值頂蓋緩降
+        eqBars[k].fill.style.height = (4 + v * 96) + '%';
+        eqBars[k].cap.style.bottom = (4 + peaks[k] * 96) + '%';
       }
     }
     requestAnimationFrame(eqLoop);
@@ -86,6 +93,8 @@ export function createSelectScreen(hud, onPick) {
       freq = new Uint8Array(analyser.frequencyBinCount);
     }
     preview.src = tracks[i].src;
+    const s = tracks[i].start || 0; // 例如超跑情人夢從第 5 秒起
+    if (s) preview.addEventListener('loadedmetadata', () => { preview.currentTime = s; }, { once: true });
     preview.play().catch(() => {});
   }
   function stopPreview() {
@@ -136,8 +145,11 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:24vh;display:flex;gap:5px;align-items:flex-end;justify-content:center;opacity:.32;pointer-events:none;}
-  .ss-eq i{width:8px;height:6%;background:linear-gradient(#4ec3ff,#ff6b9d);border-radius:4px 4px 0 0;transition:height .06s linear;}
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:28vh;display:flex;gap:4px;align-items:flex-end;justify-content:center;opacity:.55;pointer-events:none;}
+  .ss-eq i{position:relative;width:8px;height:100%;}
+  .ss-eq i b{position:absolute;left:0;right:0;bottom:0;height:4%;border-radius:4px 4px 0 0;
+    background:linear-gradient(to top,#4ec3ff,#ff6b9d);box-shadow:0 0 10px #4ec3ff77,0 0 4px #ff6b9d88;transition:height .05s linear;}
+  .ss-eq i s{position:absolute;left:0;right:0;bottom:4%;height:3px;border-radius:2px;background:#fff;box-shadow:0 0 8px #fff,0 0 4px #ffd76b;transition:bottom .08s linear;}
   .ss-top{position:absolute;top:26px;text-align:center;}
   .ss-kicker{letter-spacing:.4em;font-size:13px;color:#aeb4d8;}
   .ss-idx{margin-top:6px;font-size:14px;color:#8890b8;}
