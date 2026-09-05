@@ -2,65 +2,87 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<title>波形 Mockup — 分段重複 中間低頻</title>
+<title>波形 3 版本 — 中線對稱</title>
 <style>
-  html,body{margin:0;height:100%;background:#0b1020;}
-  body{display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:24px;
-    font-family:system-ui,sans-serif;color:#cfe;}
-  .note{position:fixed;top:20px;left:0;right:0;text-align:center;color:#8fb;font-size:14px;opacity:.8;}
-  .stage{width:100%;height:34vh;background:
-    linear-gradient(180deg,transparent,#0e1428);display:flex;align-items:flex-end;
-    justify-content:space-evenly;padding:0 3vw 4vh;box-sizing:border-box;}
-  /* 一個段落 */
-  .seg{height:100%;display:flex;align-items:flex-end;gap:4px;}
-  .seg i{width:3px;border-radius:3px;height:6%;
-    background:linear-gradient(to top,#6fd4ff,#eafaff);
-    box-shadow:0 0 10px #8fe3ffbb,0 0 4px #cdefff;}
-  .ctrl{margin-bottom:20px;}
-  button{background:#1b2340;color:#cfe;border:1px solid #3a4a80;border-radius:8px;padding:8px 16px;cursor:pointer;}
+  html,body{margin:0;background:#07080f;color:#dfe;font-family:system-ui,sans-serif;}
+  body{display:flex;flex-direction:column;}
+  h3{margin:18px 0 4px;text-align:center;font-weight:700;letter-spacing:.05em;color:#bcd;}
+  h3 small{color:#7a86a8;font-weight:400;font-size:13px;}
+  .panel{height:24vh;position:relative;display:flex;align-items:center;justify-content:center;
+    background:linear-gradient(180deg,#0a0e1c,#0e1330);border-top:1px solid #ffffff10;overflow:hidden;}
+  .mid{position:absolute;left:3%;right:3%;top:50%;height:1px;background:#ffffff12;}
+
+  /* A：霓虹細柱 */
+  .A{display:flex;align-items:center;gap:3px;width:94%;height:100%;}
+  .A i{flex:1;border-radius:4px;height:4%;background:linear-gradient(#ff6b9d,#4ec3ff,#ff6b9d);
+    box-shadow:0 0 12px #4ec3ffaa;}
+
+  /* B：點陣 LED */
+  .B{display:flex;align-items:center;gap:4px;width:94%;height:100%;justify-content:space-between;}
+  .Bcol{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
+  .Bcol span{width:7px;height:7px;border-radius:50%;background:#12305a;transition:background .05s,box-shadow .05s;}
+  .Bcol span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff;}
+
+  /* C：彩虹漸層波 */
+  .C{display:flex;align-items:center;gap:2px;width:94%;height:100%;}
+  .C i{flex:1;border-radius:6px;height:4%;filter:blur(.3px);}
 </style>
 </head>
 <body>
-  <div class="note">分段重複波形：每段中間＝低頻(最高)，往兩側＝高頻(漸矮)；整排段落一起隨音樂律動</div>
-  <div class="stage" id="stage"></div>
-  <div class="ctrl">
-    段數 <button onclick="setSeg(-1)">−</button> <span id="segN">6</span> <button onclick="setSeg(1)">＋</button>
-    ｜每段條數 <button onclick="setBar(-2)">−</button> <span id="barN">9</span> <button onclick="setBar(2)">＋</button>
-  </div>
+  <h3>版本 A — 霓虹細柱 <small>連續頻譜 · 青↔粉漸層 · 強發光（DJMax 風）</small></h3>
+  <div class="panel"><div class="mid"></div><div class="A" id="A"></div></div>
+
+  <h3>版本 B — 點陣 LED <small>復古街機音波 · 中間往上下點亮（參考你的圖 #8）</small></h3>
+  <div class="panel"><div class="mid"></div><div class="B" id="B"></div></div>
+
+  <h3>版本 C — 彩虹漸層波 <small>整條漸層變色 · 圓角柔邊（參考你的圖 #9）</small></h3>
+  <div class="panel"><div class="mid"></div><div class="C" id="C"></div></div>
+
 <script>
-  let SEG = 6, BPS = 9;
-  const stage = document.getElementById('stage');
-  let bars = [];
+  const N = 56;                 // A/C 柱數
+  const NB = 40, ROWS = 15;     // B 點陣
+  let data = new Float32Array(N);
+  let dataB = new Float32Array(NB);
 
-  function build(){
-    stage.innerHTML = '';
-    bars = [];
-    for(let s=0;s<SEG;s++){
-      const seg = document.createElement('div'); seg.className='seg';
-      for(let b=0;b<BPS;b++){
-        const i=document.createElement('i'); seg.appendChild(i); bars.push({el:i, b});
-      }
-      stage.appendChild(seg);
-    }
-    document.getElementById('segN').textContent=SEG;
-    document.getElementById('barN').textContent=BPS;
-  }
-  function setSeg(d){ SEG=Math.max(2,SEG+d); build(); }
-  function setBar(d){ BPS=Math.max(3,BPS+d); build(); }
+  // A
+  const A = document.getElementById('A');
+  A.innerHTML = Array.from({length:N}).map(()=>'<i></i>').join('');
+  const aBars = [...A.children];
+  // B
+  const B = document.getElementById('B');
+  B.innerHTML = Array.from({length:NB}).map(()=>`<div class="Bcol">${'<span></span>'.repeat(ROWS)}</div>`).join('');
+  const bCols = [...B.children].map(c=>[...c.children]);
+  // C
+  const C = document.getElementById('C');
+  C.innerHTML = Array.from({length:N}).map((_,k)=>`<i style="background:linear-gradient(hsl(${k/N*300},90%,70%),hsl(${k/N*300},90%,60%),hsl(${k/N*300},90%,70%));box-shadow:0 0 12px hsla(${k/N*300},90%,65%,.7)"></i>`).join('');
+  const cBars = [...C.children];
 
-  const half = ()=> (BPS-1)/2;
   let t=0;
+  function spectrum(arr){
+    const beat = 0.55 + 0.45*Math.abs(Math.sin(t*3));
+    for(let k=0;k<arr.length;k++){
+      const ff = k/(arr.length-1);
+      const env = Math.pow(1-ff, 1.1);                 // 低頻(左)能量高
+      const target = env*beat*(0.35+0.65*Math.abs(Math.sin(t*2+k*0.5)));
+      arr[k] += (target-arr[k])*0.25;                   // 平滑
+    }
+  }
   function frame(){
     t+=0.05;
-    for(const {el,b} of bars){
-      const freqFrac = Math.abs(b-half())/half();     // 0=段中央(低頻) .. 1=段邊(高頻)
-      const base = Math.pow(1-freqFrac, 1.6);          // 低頻能量高
-      const wob = 0.55 + 0.45*Math.abs(Math.sin(t + b*0.7 + freqFrac*3));
-      el.style.height = (6 + base*wob*94) + '%';
+    spectrum(data); spectrum(dataB);
+    for(let k=0;k<N;k++){
+      const h=(4+data[k]*94)+'%';
+      aBars[k].style.height=h;
+      cBars[k].style.height=h;
+    }
+    for(let k=0;k<NB;k++){
+      const lit=Math.round(dataB[k]*ROWS);
+      const cen=(ROWS-1)/2;
+      bCols[k].forEach((s,r)=> s.classList.toggle('on', Math.abs(r-cen) <= lit/2));
     }
     requestAnimationFrame(frame);
   }
-  build(); frame();
+  frame();
 </script>
 </body>
 </html>

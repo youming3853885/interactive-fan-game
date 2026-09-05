@@ -39,24 +39,23 @@ export function createSelectScreen(hud, onPick) {
 
   const $ = (id) => screen.querySelector('#' + id);
 
-  // ---- 底部波形：分段重複。每段中央=低頻(最高)，往兩側=高頻(漸矮)，全部段落隨頻譜跳 ----
-  const SEG = 8, BPS = 7;               // 段數 × 每段條數
-  const segHalf = (BPS - 1) / 2;
-  $('ssEq').innerHTML = Array.from({ length: SEG })
-    .map(() => `<span class="ss-seg">${'<i><b></b></i>'.repeat(BPS)}</span>`).join('');
-  const eqBars = Array.from($('ssEq').querySelectorAll('b'));
+  // ---- 底部波形：點陣 LED，中線往上下對稱點亮，依頻譜即時反饋 ----
+  const NB = 48, ROWS = 13;             // 欄數 × 每欄點數
+  const rowCenter = (ROWS - 1) / 2;
+  $('ssEq').innerHTML = Array.from({ length: NB })
+    .map(() => `<div class="ss-col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
+  const eqCols = Array.from($('ssEq').querySelectorAll('.ss-col')).map((c) => Array.from(c.children));
   let analyser = null;
   let freq = null;
   function eqLoop() {
     if (analyser) {
       analyser.getByteFrequencyData(freq);
       const usable = Math.floor(freq.length * 0.7);
-      for (let s = 0; s < SEG; s++) {
-        for (let b = 0; b < BPS; b++) {
-          const freqFrac = Math.abs(b - segHalf) / segHalf; // 0=段中央(低頻) .. 1=段邊(高頻)
-          const v = freq[Math.floor(freqFrac * usable)] / 255;
-          eqBars[s * BPS + b].style.height = (3 + v * 97) + '%';
-        }
+      for (let k = 0; k < NB; k++) {
+        const v = freq[Math.floor((k / (NB - 1)) * usable)] / 255; // 左低頻→右高頻
+        const lit = Math.max(1, Math.round(v * ROWS));             // 至少中央 1 點
+        const col = eqCols[k];
+        for (let r = 0; r < ROWS; r++) col[r].classList.toggle('on', Math.abs(r - rowCenter) <= lit / 2);
       }
     }
     requestAnimationFrame(eqLoop);
@@ -143,14 +142,12 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:18vh;display:flex;gap:0;align-items:flex-end;
-    justify-content:space-evenly;padding:0 2vw;opacity:.72;pointer-events:none;z-index:0;}
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:18vh;display:flex;align-items:center;
+    justify-content:space-between;padding:0 3vw;opacity:.85;pointer-events:none;z-index:0;}
   .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
-  .ss-seg{height:100%;display:flex;align-items:flex-end;gap:4px;}
-  .ss-eq i{position:relative;width:3px;height:100%;}
-  .ss-eq i b{position:absolute;left:0;right:0;bottom:0;height:3%;border-radius:3px;
-    background:linear-gradient(to top,#6fd4ff,#eafaff);box-shadow:0 0 10px #8fe3ffbb,0 0 4px #cdefff;transition:height .05s linear;}
-  .ss-eq i s{display:none;}
+  .ss-col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
+  .ss-col span{width:6px;height:6px;border-radius:50%;background:#173a63;transition:background .05s,box-shadow .05s;}
+  .ss-col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff,0 0 3px #cdefff;}
   .ss-top{position:absolute;top:26px;text-align:center;}
   .ss-kicker{letter-spacing:.4em;font-size:13px;color:#aeb4d8;}
   .ss-idx{margin-top:6px;font-size:14px;color:#8890b8;}
