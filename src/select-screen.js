@@ -2,6 +2,12 @@ import { sfx } from './sfx.js';
 import { attachAnalyser } from './audio.js';
 import { bpmToStars, starString } from './tracks.js';
 
+export function formatTime(sec) {
+  if (!Number.isFinite(sec)) return '--:--';
+  const s = Math.floor(sec);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
 // 音樂遊戲風選歌畫面：中央旋轉黑膠 + 唱針、左右封面、切歌箭頭、BPM+難度、試聽、開始。
 export function createSelectScreen(hud, onPick) {
   injectStyle();
@@ -25,6 +31,10 @@ export function createSelectScreen(hud, onPick) {
       <div class="ss-title" id="ssTitle"></div>
       <div class="ss-sub" id="ssSub"></div>
       <div class="ss-info"><span id="ssBpm"></span><span class="ss-stars" id="ssStars"></span></div>
+      <div class="ss-len">遊戲長度
+        <span class="ss-seg"><button data-len="2" class="on">2 分鐘</button><button data-len="F">完整曲</button></span>
+        <span class="ss-dur" id="ssDur"></span>
+      </div>
     </div>
     <div class="ss-controls">
       <button class="ss-btn ss-preview" id="ssPreview">▶ 試聽</button>
@@ -53,7 +63,7 @@ export function createSelectScreen(hud, onPick) {
       const usable = Math.floor(freq.length * 0.7);
       for (let k = 0; k < NB; k++) {
         const v = freq[Math.floor((k / (NB - 1)) * usable)] / 255; // 左低頻→右高頻
-        const lit = Math.max(1, Math.round(v * ROWS));             // 至少中央 1 點
+        const lit = Math.max(1, Math.round(Math.pow(v, 0.7) * ROWS));             // 至少中央 1 點
         const col = eqCols[k];
         for (let r = 0; r < ROWS; r++) col[r].classList.toggle('on', Math.abs(r - rowCenter) <= lit / 2);
       }
@@ -67,6 +77,20 @@ export function createSelectScreen(hud, onPick) {
   let playing = false;
 
   const bg = (t) => (t.cover ? `url("${t.cover}")` : 'linear-gradient(135deg,#4ec3ff,#ff6b9d)');
+
+  let lenMode = '2';
+  const durProbe = document.createElement('video');
+  durProbe.preload = 'metadata';
+  const durCache = {};
+  function showDuration() {
+    const t = tracks[i];
+    const d = durCache[t.id];
+    $('ssDur').textContent = `🕒 時長 ${formatTime(d)}`;
+    if (d === undefined) {
+      durProbe.src = t.src;
+      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t) $('ssDur').textContent = `🕒 時長 ${formatTime(durProbe.duration)}`; };
+    }
+  }
 
   function render() {
     if (!tracks.length) return;
@@ -82,6 +106,7 @@ export function createSelectScreen(hud, onPick) {
     $('ssStars').textContent = stars ? `難度 ${starString(stars)}` : '';
     $('ssDots').innerHTML = tracks.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
     if (playing) startPreview();
+    showDuration();
   }
 
   function startPreview() {
@@ -108,6 +133,13 @@ export function createSelectScreen(hud, onPick) {
     b.addEventListener('mouseenter', () => sfx.hover());
     b.addEventListener('click', () => move(Number(b.dataset.d)));
   });
+  screen.querySelectorAll('.ss-len [data-len]').forEach((b) => {
+    b.addEventListener('click', () => {
+      lenMode = b.dataset.len;
+      screen.querySelectorAll('.ss-len [data-len]').forEach((x) => x.classList.toggle('on', x === b));
+      sfx.hover();
+    });
+  });
   $('ssPreview').addEventListener('click', () => {
     playing = !playing;
     sfx.toggle(playing);
@@ -117,13 +149,13 @@ export function createSelectScreen(hud, onPick) {
     if (playing) startPreview(); else preview.pause();
   });
   $('ssStart').addEventListener('mouseenter', () => sfx.hover());
-  $('ssStart').addEventListener('click', () => { sfx.confirm(); stopPreview(); onPick(i); });
+  $('ssStart').addEventListener('click', () => { sfx.confirm(); stopPreview(); onPick(i, lenMode); });
 
   const onKey = (e) => {
     if (screen.style.display === 'none') return;
     if (e.key === 'ArrowLeft') move(-1);
     if (e.key === 'ArrowRight') move(1);
-    if (e.key === 'Enter') { sfx.confirm(); stopPreview(); onPick(i); }
+    if (e.key === 'Enter') { sfx.confirm(); stopPreview(); onPick(i, lenMode); }
   };
   addEventListener('keydown', onKey);
 
@@ -142,7 +174,7 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:18vh;display:flex;align-items:center;
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:13vh;display:flex;align-items:center;
     justify-content:space-between;padding:0 3vw;opacity:.85;pointer-events:none;z-index:0;}
   .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
   .ss-col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
@@ -193,6 +225,11 @@ function injectStyle() {
   .ss-chev:hover{background:#4ec3ff;color:#0b0b12;transform:scale(1.08);box-shadow:0 0 24px #4ec3ff88;}
   .ss-dots{margin-top:22px;display:flex;gap:10px;}
   .ss-dots i{width:9px;height:9px;border-radius:50%;background:#ffffff33;}
-  .ss-dots i.on{background:#ffd76b;box-shadow:0 0 12px #ffd76b;}`;
+  .ss-dots i.on{background:#ffd76b;box-shadow:0 0 12px #ffd76b;}
+  .ss-len{margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center;color:#aeb4d8;font-size:14px;}
+  .ss-len .ss-seg{display:flex;border:1px solid #ffffff2e;border-radius:999px;overflow:hidden;}
+  .ss-len .ss-seg button{background:transparent;color:#cdd6ff;border:none;padding:6px 14px;cursor:pointer;font-size:14px;}
+  .ss-len .ss-seg button.on{background:linear-gradient(135deg,#2b7bff,#7aa8ff);color:#0b0b12;font-weight:700;}
+  .ss-dur{color:#cdd6ff;}`;
   document.head.appendChild(s);
 }
