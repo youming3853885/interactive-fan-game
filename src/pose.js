@@ -1,8 +1,12 @@
 import * as poseDetection from '@tensorflow-models/pose-detection';
-import '@tensorflow/tfjs';
+import * as tf from '@tensorflow/tfjs';
 
 // 左右各一個偵測器，各自吃半張畫面 → 該側玩家的手腕/肩座標。
 export async function createPoseReader(video) {
+  // 明確用 webgl 後端（最穩、支援最廣），並等它初始化完再建偵測器。
+  // 預設會挑 webgpu 但常未初始化，導致 tf.ready() 前呼叫其他方法報錯。
+  await tf.setBackend('webgl');
+  await tf.ready();
   const model = poseDetection.SupportedModels.MoveNet;
   const cfg = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
   const detA = await poseDetection.createDetector(model, cfg);
