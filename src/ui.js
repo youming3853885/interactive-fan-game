@@ -200,12 +200,70 @@ export function createUI(canvas) {
     }
   }
 
+  // 單人準備：不分割，中央虛線人形輪廓 + 左右手目標環；雙手都被鏡頭看到才倒數。
+  // state = { need, hold, ready, handL, handR }
+  function drawReadySingle(state) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    centerText('站到鏡頭前，舉起左右手讓鏡頭看到你，維持 5 秒開始', 0.08, 0.032, '#fff');
+
+    const cx = W / 2;
+    const headY = H * 0.30, headR = H * 0.055;
+    const shoulderY = H * 0.40, hipY = H * 0.64;
+    const handLx = cx - W * 0.15, handRx = cx + W * 0.15, handY = H * 0.24;
+
+    // 虛線人形輪廓
+    ctx.save();
+    ctx.setLineDash([14, 12]);
+    ctx.strokeStyle = '#ffffffaa'; ctx.lineWidth = 4; ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.arc(cx, headY, headR, 0, Math.PI * 2);               // 頭
+    ctx.moveTo(cx, headY + headR); ctx.lineTo(cx, hipY);      // 軀幹
+    ctx.moveTo(cx, shoulderY); ctx.lineTo(handLx, handY);     // 左臂舉高
+    ctx.moveTo(cx, shoulderY); ctx.lineTo(handRx, handY);     // 右臂舉高
+    ctx.moveTo(cx, hipY); ctx.lineTo(cx - W * 0.06, H * 0.84);// 左腿
+    ctx.moveTo(cx, hipY); ctx.lineTo(cx + W * 0.06, H * 0.84);// 右腿
+    ctx.stroke();
+    ctx.restore();
+
+    // 左右手目標環：被偵測到就點亮
+    for (const [hand, hx, color, label] of [[state.handL, handLx, colorA, '左手'], [state.handR, handRx, colorB, '右手']]) {
+      const on = !!hand;
+      ctx.beginPath(); ctx.arc(hx, handY, H * 0.05, 0, Math.PI * 2);
+      ctx.save();
+      if (on) { ctx.fillStyle = color + '55'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 30; }
+      ctx.setLineDash(on ? [] : [10, 8]);
+      ctx.strokeStyle = on ? color : '#ffffff88'; ctx.lineWidth = on ? 6 : 4; ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = on ? color : '#ffffffaa'; ctx.font = `bold ${Math.round(H * 0.026)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText(on ? '✓ ' + label : '👋 ' + label, hx, handY + H * 0.085);
+    }
+
+    // 雙手都到 → 大倒數（軀幹中央）
+    const bothOn = state.handL && state.handR;
+    const remain = Math.max(0, Math.ceil(state.need - state.hold));
+    const label = state.ready ? 'GO!' : (bothOn ? String(remain) : '');
+    if (label) {
+      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#ffd76b'; ctx.lineWidth = 6;
+      ctx.font = `bold ${Math.round(H * 0.16)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      const my = (shoulderY + hipY) / 2;
+      ctx.strokeText(label, cx, my); ctx.fillText(label, cx, my);
+    }
+
+    // 實際手部亮點
+    drawHand(state.handL, colorA);
+    drawHand(state.handR, colorB);
+  }
+
   function clear() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
   const api = {
     drawReady,
+    drawReadySingle,
     clear,
     onComboBurst: null,
     boxHit(hand, side) {

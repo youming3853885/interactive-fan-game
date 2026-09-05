@@ -187,9 +187,9 @@ async function loop(pose) {
     sendStop();
   } else if (phase === 'ready') {
     if (mode === 'single') {
-      const hit = ui.boxHit(handA, 'A') || ui.boxHit(handB, 'A');
-      readyState.A = { ...updateHold(readyState.A.hold, hit, dt, READY_NEED) };
-      ui.drawReady({ need: READY_NEED, A: { hand: handA || handB, hold: readyState.A.hold, ready: readyState.A.ready }, B: { hand: null, hold: 0, ready: true } });
+      const both = !!(handL && handR);
+      readyState.A = { ...updateHold(readyState.A.hold, both, dt, READY_NEED) };
+      ui.drawReadySingle({ need: READY_NEED, hold: readyState.A.hold, ready: readyState.A.ready, handL, handR });
       if (readyState.A.ready) startPlaying();
     } else {
       const hitA = ui.boxHit(handA, 'A'), hitB = ui.boxHit(handB, 'B');
