@@ -4,9 +4,10 @@ export const SCORE_CFG = {
   sGood: 100, sGreat: 200, sPerfect: 300, // 每級基礎分（再乘 combo 倍率）
   comboStep: 2,        // 每 N 圈 combo 倍率 +1
   comboMax: 5,
-  revsPerBeat: 0.5,    // 目標：每 2 拍一圈
-  // 判定：該圈平均轉速 / 目標轉速 的比例（寬鬆，容易 PERFECT；轉更快也算 PERFECT）
-  spPerfect: 0.75, spGreat: 0.45,
+  revsPerBeat: 0.5,    // 導引箭頭/風機用的目標轉速
+  // 判定：該圈平均角速度(rad/s)的絕對門檻（可達成，三級才會真的出現）
+  perfectW: 5.0,       // ≈0.8 圈/秒（用力轉）
+  greatW: 2.5,         // ≈0.4 圈/秒（一般轉）；以下=GOOD
 };
 
 export function targetOmegaFor(bpm, cfg) {
@@ -18,11 +19,11 @@ export function comboMultiplier(combo, cfg) {
   return Math.min(cfg.comboMax, 1 + Math.floor(combo / cfg.comboStep));
 }
 
-// 依「該圈平均轉速 vs 目標轉速」給判定：PERFECT / GREAT / GOOD（速率契合度）
+// 依「該圈平均角速度(rad/s)」給判定：轉越用力越高級。PERFECT / GREAT / GOOD。
 export function judgeBySpeed(avgOmega, bpm, cfg) {
-  const r = Math.abs(avgOmega) / targetOmegaFor(bpm, cfg);
-  if (r >= cfg.spPerfect) return 'PERFECT';
-  if (r >= cfg.spGreat) return 'GREAT';
+  const w = Math.abs(avgOmega);
+  if (w >= cfg.perfectW) return 'PERFECT';
+  if (w >= cfg.greatW) return 'GREAT';
   return 'GOOD';
 }
 
