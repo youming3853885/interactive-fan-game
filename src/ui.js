@@ -4,7 +4,8 @@ import { boxFor, pointInBox } from './ready.js';
 export function createUI(canvas) {
   const ctx = canvas.getContext('2d');
   const particles = [];
-  const colorA = '#4ec3ff', colorB = '#ff6b9d';
+  const colorA = '#2b7bff', colorB = '#ff3b3b'; // 左藍 右紅（固定）
+  let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   function resize() {
     canvas.width = canvas.clientWidth;
@@ -29,6 +30,33 @@ export function createUI(canvas) {
     ctx.fillStyle = color; ctx.font = `bold ${Math.round(H * sizeFrac)}px system-ui`;
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText(text, W / 2, H * yFrac);
+  }
+
+  // 玩家手部：手腕位置畫手掌圖示 + 側色光環，方便知道手在哪。
+  function drawHand(pt, color) {
+    if (!pt) return;
+    const H = canvas.height;
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, H * 0.032, 0, Math.PI * 2);
+    ctx.fillStyle = color + '44'; ctx.fill();
+    ctx.strokeStyle = color; ctx.lineWidth = 3; ctx.stroke();
+    ctx.font = `${Math.round(H * 0.05)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🖐', pt.x, pt.y);
+  }
+
+  // 最上層：畫圓運動導引。虛線圓 = 要畫的軌跡；亮點沿圓移動 = 該畫的方向。
+  function drawGuide(center, radius, dir, color) {
+    ctx.save();
+    ctx.strokeStyle = color + 'bb'; ctx.lineWidth = 4; ctx.setLineDash([12, 12]);
+    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    const sign = dir === 'R' ? -1 : 1; // F 順時針、R 逆時針
+    const ang = guidePhase * sign;
+    const mx = center.x + radius * Math.cos(ang), my = center.y + radius * Math.sin(ang);
+    ctx.shadowColor = color; ctx.shadowBlur = 16;
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.02, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
   }
 
   function spawnParticles(x, y, color) {
@@ -89,12 +117,12 @@ export function createUI(canvas) {
         const f = (s.hold / state.need) * box.h;
         ctx.fillStyle = (s.ready ? '#5dff9b' : color) + '66';
         ctx.fillRect(box.x, box.y + box.h - f, box.w, f);
-        // 手的位置點
-        ctx.fillStyle = color;
-        ctx.beginPath(); ctx.arc(s.hand.x, s.hand.y, 12, 0, Math.PI * 2); ctx.fill();
         const remain = Math.ceil(state.need - s.hold);
         ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(H * 0.05)}px system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillText(s.ready ? 'OK ✓' : `把手放進方塊 ${remain}`, cx, box.y - H * 0.05);
+        // 手掌圖示
+        drawHand(s.hand, color);
       }
     }
   }
@@ -131,12 +159,22 @@ export function createUI(canvas) {
         ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
+
+      // 最上層：畫圓導引圓 + 方向標記 + 手掌圖示
+      guidePhase = (guidePhase + 0.06) % (Math.PI * 2);
+      const R = Math.min(canvas.width, canvas.height) * 0.16;
+      for (const [side, color] of [['A', colorA], ['B', colorB]]) {
+        const s = state[side];
+        const center = s.shoulder || { x: (side === 'A' ? 0.25 : 0.75) * canvas.width, y: canvas.height * 0.5 };
+        drawGuide(center, R, s.requiredDir, color);
+        drawHand(s.hand, color);
+      }
     },
 
     victory(who) {
       ctx.fillStyle = '#000a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = who === 'A' ? '#4ec3ff' : '#ff6b9d';
+      ctx.fillStyle = who === 'A' ? colorA : colorB;
       ctx.font = `${Math.round(canvas.height * 0.12)}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       ctx.fillText(`玩家 ${who} 勝利！`, canvas.width / 2, canvas.height / 2);

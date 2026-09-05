@@ -167,9 +167,11 @@ async function loop(pose) {
       { ...fb, energy: chB.energy },
     )).catch(() => {});
 
+    const shoulderA = armA ? toCanvas(armA.shoulder, 'A') : null;
+    const shoulderB = armB ? toCanvas(armB.shoulder, 'B') : null;
     ui.render({
-      A: { energy: chA.energy, requiredDir: chA.requiredDir, hand: handA },
-      B: { energy: chB.energy, requiredDir: chB.requiredDir, hand: handB },
+      A: { energy: chA.energy, requiredDir: chA.requiredDir, hand: handA, shoulder: shoulderA },
+      B: { energy: chB.energy, requiredDir: chB.requiredDir, hand: handB, shoulder: shoulderB },
     });
 
     done = winner(chA, chB, CONFIG);
