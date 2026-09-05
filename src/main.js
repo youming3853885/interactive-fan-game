@@ -1,11 +1,13 @@
 import { wristAngle, trackRotation } from './motion.js';
-import { CONFIG, initChannel, updateChannel, fanCommand, winner } from './game.js';
+import { CONFIG, fanCommand } from './game.js';
+import { chartFromBpm, segmentAt } from './chart.js';
+import { SCORE_CFG, scoreStep, targetOmegaFor, comboMultiplier, higherScore } from './score.js';
+import { BUILTIN_TRACKS, bpmToStars } from './tracks.js';
 import { formatCommand } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
 import { createUI } from './ui.js';
 import { createMusicWidget } from './music.js';
-import { BUILTIN_TRACKS } from './tracks.js';
 import { loadSettings } from './settings.js';
 import { createSettingsPanel } from './settings-panel.js';
 import { createSelectScreen } from './select-screen.js';
@@ -38,19 +40,23 @@ btn.addEventListener('click', async () => {
 });
 
 // ---- 遊戲狀態 ----
-const READY_NEED = 5; // 手放進方塊需維持秒數
-let phase = 'loading'; // loading | select | ready | playing | victory
+const READY_NEED = 5;
+let phase = 'loading';
 let media = null;
 let selectScreen = null;
-const chA = { ...initChannel('F') };
-const chB = { ...initChannel('R') };
+let selectedIdx = 0;
+let lenMode = '2';
+let chart = [];
+let bpm = 120;
+let roundSec = 120;
+let startTime = 0;
+let scoreA = { score: 0, combo: 0 };
+let scoreB = { score: 0, combo: 0 };
 const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
 const readyState = { need: READY_NEED, A: { hold: 0, ready: false }, B: { hold: 0, ready: false } };
-let done = null;
+let ended = false;
 let last = performance.now();
-
-const rng = () => Math.random();
 
 function startReady() {
   readyState.A = { hold: 0, ready: false };
@@ -59,11 +65,22 @@ function startReady() {
 }
 
 function startPlaying() {
-  Object.assign(chA, initChannel('F'));
-  Object.assign(chB, initChannel('R'));
-  done = null;
-  last = performance.now();
+  const t = media.tracks[selectedIdx];
+  bpm = t.bpm || 120;
+  const songLen = Number.isFinite(mvVideo.duration) ? mvVideo.duration : 120;
+  roundSec = lenMode === '2' ? Math.min(120, songLen) : songLen;
+  chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
+  scoreA = { score: 0, combo: 0 };
+  scoreB = { score: 0, combo: 0 };
+  ended = false;
+  media.playTrack(selectedIdx);
+  startTime = performance.now();
+  last = startTime;
   phase = 'playing';
+  mvVideo.addEventListener('loadedmetadata', () => {
+    const sl = mvVideo.duration;
+    if (Number.isFinite(sl)) { roundSec = lenMode === '2' ? Math.min(120, sl) : sl; chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec); }
+  }, { once: true });
 }
 
 function sendStop() {
@@ -97,8 +114,9 @@ async function boot() {
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
   createSettingsPanel(hud, settings, media);
-  selectScreen = createSelectScreen(hud, (i) => {
-    media.playTrack(i);
+  selectScreen = createSelectScreen(hud, (idx, mode) => {
+    selectedIdx = idx;
+    lenMode = mode;
     selectScreen.hide();
     startReady();
   });
@@ -157,28 +175,37 @@ async function loop(pose) {
     sendStop();
     if (readyState.A.ready && readyState.B.ready) startPlaying();
   } else if (phase === 'playing') {
-    Object.assign(chA, updateChannel(chA, omegaA, dt, CONFIG, rng));
-    Object.assign(chB, updateChannel(chB, omegaB, dt, CONFIG, rng));
+    const elapsed = (performance.now() - startTime) / 1000;
+    const timeLeft = Math.max(0, roundSec - elapsed);
+    const { current, next, remain } = segmentAt(chart, elapsed);
+    const segDir = current ? current.dir : 'S';
+
+    scoreA = scoreStep(scoreA, segDir, omegaA, dt, bpm, SCORE_CFG);
+    scoreB = scoreStep(scoreB, segDir, omegaB, dt, bpm, SCORE_CFG);
 
     const fa = fanCommand(omegaA, CONFIG);
     const fb = fanCommand(omegaB, CONFIG);
     sender.send(formatCommand(
-      { ...fa, energy: chA.energy },
-      { ...fb, energy: chB.energy },
+      { ...fa, energy: Math.min(100, (scoreA.score / SCORE_CFG.scoreForFullBar) * 100) },
+      { ...fb, energy: Math.min(100, (scoreB.score / SCORE_CFG.scoreForFullBar) * 100) },
     )).catch(() => {});
 
-    const shoulderA = armA ? toCanvas(armA.shoulder, 'A') : null;
-    const shoulderB = armB ? toCanvas(armB.shoulder, 'B') : null;
     ui.render({
-      A: { energy: chA.energy, requiredDir: chA.requiredDir, hand: handA, shoulder: shoulderA },
-      B: { energy: chB.energy, requiredDir: chB.requiredDir, hand: handB, shoulder: shoulderB },
+      timeLeft,
+      segDir,
+      nextDir: next ? next.dir : null,
+      nextIn: remain,
+      guideOmega: targetOmegaFor(bpm, SCORE_CFG),
+      A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, shoulder: armA ? toCanvas(armA.shoulder, 'A') : null },
+      B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, shoulder: armB ? toCanvas(armB.shoulder, 'B') : null },
     });
 
-    done = winner(chA, chB, CONFIG);
-    if (done) {
-      ui.victory(done);
+    if (!ended && elapsed >= roundSec) {
+      ended = true;
       phase = 'victory';
       sendStop();
+      const who = higherScore(scoreA.score, scoreB.score);
+      ui.victory(who, scoreA.score, scoreB.score);
       setTimeout(() => { selectScreen.show(media.tracks); phase = 'select'; }, 4000);
     }
   }
