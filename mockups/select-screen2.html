@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" /><title>選歌 Mockup — 時長/長度/波形不重疊</title>
+<style>
+  :root{--blue:#2b7bff;--gold:#ffd76b;}
+  *{box-sizing:border-box;} html,body{margin:0;height:100%;}
+  body{height:100vh;overflow:hidden;color:#fff;font-family:system-ui,"Segoe UI",sans-serif;
+    background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
+      radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;padding-bottom:15vh;}
+  .top{position:absolute;top:22px;text-align:center;}
+  .kicker{letter-spacing:.4em;font-size:13px;color:#aeb4d8;}
+  .idx{margin-top:6px;font-size:14px;color:#8890b8;}
+  .stage{display:flex;align-items:center;justify-content:center;gap:min(5vw,70px);}
+  .side{width:120px;height:120px;border-radius:50%;background-size:cover;background-position:center;
+    filter:brightness(.82);transform:scale(.92);box-shadow:0 10px 40px #000a;border:3px solid #ffffff22;}
+  .disc-wrap{position:relative;width:min(38vh,360px);aspect-ratio:1;}
+  .disc{position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle at 50% 50%,#0d0d0f 0 2px,#17171b 2px 4px);
+    box-shadow:0 0 0 6px #05050799,0 24px 70px #000c,0 0 60px #2b7bff33;display:flex;align-items:center;justify-content:center;
+    animation:spin 4s linear infinite;animation-play-state:running;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .label{width:56%;height:56%;border-radius:50%;background-size:cover;background-position:center;box-shadow:inset 0 0 0 4px #00000055;}
+  .chev{width:56px;height:56px;border-radius:50%;border:1px solid #ffffff33;background:#ffffff0d;color:#fff;font-size:26px;cursor:pointer;}
+  .meta{text-align:center;margin-top:18px;}
+  .title{font-size:32px;font-weight:800;}
+  .sub{margin-top:4px;color:#aeb4d8;font-size:15px;}
+  .info{margin-top:10px;display:flex;gap:16px;justify-content:center;font-size:15px;align-items:center;}
+  .info .bpm{color:var(--blue);font-weight:700;} .stars{color:var(--gold);letter-spacing:2px;} .dur{color:#cdd6ff;}
+  /* 長度選擇 */
+  .lenrow{margin-top:14px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:14px;color:#aeb4d8;}
+  .seg{display:flex;border:1px solid #ffffff2e;border-radius:999px;overflow:hidden;}
+  .seg button{background:transparent;color:#cdd6ff;border:none;padding:7px 16px;cursor:pointer;font-size:14px;}
+  .seg button.on{background:linear-gradient(135deg,var(--blue),#7aa8ff);color:#0b0b12;font-weight:700;}
+  .controls{margin-top:18px;display:flex;gap:14px;justify-content:center;}
+  .btn{border:none;cursor:pointer;border-radius:999px;font-weight:700;font-size:16px;padding:12px 22px;}
+  .preview{background:#ffffff14;color:#fff;border:1px solid #ffffff2e;}
+  .start{background:linear-gradient(135deg,var(--blue),#ff5db0);color:#0b0b12;font-size:18px;padding:14px 40px;box-shadow:0 8px 30px #2b7bff55;}
+  .dots{margin-top:16px;display:flex;gap:10px;justify-content:center;}
+  .dots i{width:9px;height:9px;border-radius:50%;background:#ffffff33;}
+  .dots i.on{background:var(--gold);box-shadow:0 0 12px var(--gold);}
+  /* 波形：固定在最下方獨立帶狀，不與上方重疊 */
+  .eq{position:absolute;left:0;right:0;bottom:0;height:13vh;display:flex;align-items:center;justify-content:space-between;
+    padding:0 3vw;border-top:1px solid #ffffff10;background:linear-gradient(180deg,transparent,#0a0e1c);}
+  .col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
+  .col span{width:6px;height:6px;border-radius:50%;background:#173a63;}
+  .col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff,0 0 3px #cdefff;}
+</style>
+</head>
+<body>
+  <div class="top"><div class="kicker">選 擇 歌 曲</div><div class="idx" id="idx">2 / 4</div></div>
+  <div class="stage">
+    <button class="chev" onclick="move(-1)">‹</button>
+    <div class="side" id="prev"></div>
+    <div class="disc-wrap"><div class="disc"><div class="label" id="label"></div></div></div>
+    <div class="side" id="next"></div>
+    <button class="chev" onclick="move(1)">›</button>
+  </div>
+  <div class="meta">
+    <div class="title" id="title"></div>
+    <div class="sub" id="sub"></div>
+    <div class="info"><span class="bpm" id="bpm"></span><span class="stars" id="stars"></span><span class="dur" id="dur"></span></div>
+    <div class="lenrow">遊戲長度
+      <span class="seg"><button id="len2" class="on" onclick="setLen('2')">2 分鐘</button><button id="lenF" onclick="setLen('F')">完整曲</button></span>
+      <span id="lenNote" style="color:#8890b8"></span>
+    </div>
+    <div class="controls">
+      <button class="btn preview">⏸ 停止試聽</button>
+      <button class="btn start">開始遊戲</button>
+    </div>
+    <div class="dots" id="dots"></div>
+  </div>
+  <div class="eq" id="eq"></div>
+<script>
+  const songs=[
+    {name:'Canon Rock',sub:'搖滾電吉他',bpm:90,stars:2,dur:260,cover:'../音樂影片/Canon Rock 封面.png'},
+    {name:'超跑情人夢',sub:'卜學亮',bpm:120,stars:3,dur:245,cover:'../音樂影片/超跑情人夢.jpg'},
+    {name:'頭文字D',sub:'INITIAL D · Eurobeat',bpm:150,stars:4,dur:218,cover:'../音樂影片/頭文字D.jpg'},
+    {name:'大黃蜂的飛行',sub:'古典 · 快板',bpm:165,stars:5,dur:80,cover:'../音樂影片/大黃蜂的飛行.jpg'},
+  ];
+  let i=1,len='2';
+  const el=id=>document.getElementById(id);
+  const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const star=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+  function paint(){
+    const s=songs[i];
+    el('label').style.backgroundImage=`url("${s.cover}")`;
+    el('prev').style.backgroundImage=`url("${songs[(i-1+4)%4].cover}")`;
+    el('next').style.backgroundImage=`url("${songs[(i+1)%4].cover}")`;
+    el('title').textContent=s.name; el('sub').textContent=s.sub;
+    el('bpm').textContent=`♪ ${s.bpm} BPM`; el('stars').textContent=`難度 ${star(s.stars)}`;
+    el('dur').textContent=`🕒 時長 ${fmt(s.dur)}`;
+    el('idx').textContent=`${i+1} / 4`;
+    el('dots').innerHTML=songs.map((_,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
+    updLen();
+  }
+  function setLen(v){ len=v; el('len2').classList.toggle('on',v==='2'); el('lenF').classList.toggle('on',v==='F'); updLen(); }
+  function updLen(){
+    const full=songs[i].dur;
+    el('lenNote').textContent = len==='2' ? `（實際玩 ${fmt(Math.min(120,full))}）` : `（實際玩 ${fmt(full)}）`;
+  }
+  function move(d){ i=(i+d+4)%4; paint(); }
+
+  // 波形：點陣、置底不重疊、波動更強烈
+  const NB=52,ROWS=13;
+  el('eq').innerHTML=Array.from({length:NB}).map(()=>`<div class="col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
+  const cols=[...el('eq').children].map(c=>[...c.children]);
+  const data=new Float32Array(NB); let t=0;
+  function frame(){
+    t+=0.06;
+    const beat=0.6+0.4*Math.abs(Math.sin(t*3.2));
+    for(let k=0;k<NB;k++){
+      const ff=k/(NB-1);
+      const env=Math.pow(1-ff,0.9);
+      let target=env*beat*(0.3+0.7*Math.abs(Math.sin(t*2.4+k*0.6)));
+      target=Math.pow(target,0.7);              // ← 波動更強烈(拉high低值)
+      data[k]+=(target-data[k])*0.35;
+      const lit=Math.max(1,Math.round(data[k]*ROWS));
+      const cen=(ROWS-1)/2;
+      cols[k].forEach((s,r)=>s.classList.toggle('on',Math.abs(r-cen)<=lit/2));
+    }
+    requestAnimationFrame(frame);
+  }
+  paint(); frame();
+</script>
+</body>
+</html>

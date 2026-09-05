@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" /><title>對戰 HUD Mockup</title>
+<style>
+  :root{--blue:#2b7bff;--red:#ff3b3b;--gold:#ffd76b;}
+  *{box-sizing:border-box;} html,body{margin:0;height:100%;font-family:system-ui,"Segoe UI",sans-serif;color:#fff;}
+  body{height:100vh;overflow:hidden;position:relative;
+    background:radial-gradient(1200px 700px at 50% 40%,#243049,#0a0d16 70%);}
+  /* 假 MV 背景 */
+  .mv{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    font-size:40px;color:#ffffff10;letter-spacing:.3em;user-select:none;}
+  .divider{position:absolute;left:50%;top:0;bottom:0;border-left:2px dashed #ffffff55;}
+  .tintL{position:absolute;left:0;top:0;bottom:0;width:50%;background:linear-gradient(90deg,#2b7bff18,transparent);}
+  .tintR{position:absolute;right:0;top:0;bottom:0;width:50%;background:linear-gradient(-90deg,#ff3b3b18,transparent);}
+
+  /* 校名 */
+  .school{position:absolute;top:12px;left:16px;font-size:15px;letter-spacing:.08em;color:#dfe6ff;
+    background:#0b1226aa;border:1px solid #ffffff22;border-radius:20px;padding:6px 14px;backdrop-filter:blur(4px);}
+  .school b{color:var(--gold);}
+
+  /* 段落 HUD */
+  .seg{position:absolute;top:16px;left:50%;transform:translateX(-50%);text-align:center;}
+  .seg .timer{font-size:16px;color:#cdd6ff;}
+  .seg .now{font-size:52px;font-weight:900;text-shadow:0 0 20px #4ea8ff88;margin:2px 0;}
+  .seg .next{font-size:15px;color:#aab4d8;}
+
+  /* 導引圓 */
+  .guide{position:absolute;top:50%;width:230px;height:230px;margin-top:-115px;border-radius:50%;
+    border:3px dashed;}
+  .guide.l{left:calc(25% - 115px);border-color:var(--blue);}
+  .guide.r{left:calc(75% - 115px);border-color:var(--red);}
+  .gdot{position:absolute;width:22px;height:22px;border-radius:50%;top:-11px;left:calc(50% - 11px);}
+  .guide.l .gdot{background:var(--blue);box-shadow:0 0 16px var(--blue);animation:spin 3s linear infinite;}
+  .guide.r .gdot{background:var(--red);box-shadow:0 0 16px var(--red);animation:spin 3s linear infinite reverse;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+  .guide .orbit{position:absolute;inset:0;animation:spin 3s linear infinite;}
+  .guide.r .orbit{animation:spin 3s linear infinite reverse;}
+  .hand{position:absolute;font-size:40px;filter:drop-shadow(0 0 8px #000);}
+
+  /* 遊戲化能量條（側邊直立、分節、發光、頭像+分數+combo）*/
+  .bar{position:absolute;top:12%;height:76%;width:96px;display:flex;flex-direction:column;align-items:center;gap:8px;}
+  .bar.l{left:20px;} .bar.r{right:20px;}
+  .avatar{width:56px;height:56px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:30px;
+    border:3px solid;}
+  .bar.l .avatar{border-color:var(--blue);background:#0e1c3a;box-shadow:0 0 18px var(--blue);}
+  .bar.r .avatar{border-color:var(--red);background:#3a0e14;box-shadow:0 0 18px var(--red);}
+  .tube{flex:1;width:34px;border-radius:18px;background:#0c1120;border:2px solid #ffffff22;position:relative;overflow:hidden;
+    display:flex;flex-direction:column-reverse;padding:4px;gap:3px;}
+  .fill{width:100%;border-radius:12px;transition:height .2s;}
+  .bar.l .fill{background:linear-gradient(#8ec5ff,var(--blue));box-shadow:0 0 14px var(--blue);}
+  .bar.r .fill{background:linear-gradient(#ff9a9a,var(--red));box-shadow:0 0 14px var(--red);}
+  .score{font-size:22px;font-weight:900;}
+  .bar.l .score{color:#8ec5ff;} .bar.r .score{color:#ff9a9a;}
+  .plabel{font-size:13px;color:#cdd6ff;letter-spacing:.1em;}
+  .combo{font-size:18px;font-weight:900;padding:2px 10px;border-radius:12px;background:#00000055;}
+  .bar.l .combo{color:var(--gold);} .bar.r .combo{color:var(--gold);}
+
+  /* combo 爆發 */
+  .burst{position:absolute;top:38%;font-size:64px;font-weight:900;opacity:0;pointer-events:none;
+    text-shadow:0 0 24px currentColor;}
+  .burst.l{left:25%;transform:translateX(-50%);color:var(--blue);}
+  .burst.r{left:75%;transform:translateX(-50%);color:var(--red);}
+  @keyframes pop{0%{opacity:0;transform:translateX(-50%) scale(.4);}30%{opacity:1;transform:translateX(-50%) scale(1.2);}
+    100%{opacity:0;transform:translateX(-50%) scale(1.6) translateY(-40px);}}
+  .flash{position:absolute;inset:0;opacity:0;pointer-events:none;}
+  @keyframes fl{0%{opacity:.5;}100%{opacity:0;}}
+</style>
+</head>
+<body>
+  <div class="mv">🎬 MV 背景播放中（遊戲時攝影機隱藏）</div>
+  <div class="tintL"></div><div class="tintR"></div><div class="divider"></div>
+
+  <div class="school">🏫 澎湖縣湖西鄉龍門國民小學 · <b>畫圈對決</b></div>
+
+  <div class="seg">
+    <div class="timer">⏱ 1:48</div>
+    <div class="now">↻ 正轉</div>
+    <div class="next">下一個：↺ 反轉　6</div>
+  </div>
+
+  <div class="guide l"><div class="orbit"><div class="gdot"></div></div></div>
+  <div class="guide r"><div class="orbit"><div class="gdot"></div></div></div>
+  <div class="hand" id="handL" style="left:22%;top:46%;">🖐</div>
+  <div class="hand" id="handR" style="left:72%;top:52%;">🖐</div>
+
+  <div class="bar l">
+    <div class="avatar">🕹️</div>
+    <div class="plabel">P1</div>
+    <div class="tube"><div class="fill" id="fillL" style="height:35%"></div></div>
+    <div class="score" id="scoreL">1,240</div>
+    <div class="combo" id="comboL">🔥 x3</div>
+  </div>
+  <div class="bar r">
+    <div class="avatar">🎮</div>
+    <div class="plabel">P2</div>
+    <div class="tube"><div class="fill" id="fillR" style="height:52%"></div></div>
+    <div class="score" id="scoreR">1,860</div>
+    <div class="combo" id="comboR">🔥 x5</div>
+  </div>
+
+  <div class="burst l" id="burstL"></div>
+  <div class="burst r" id="burstR"></div>
+  <div class="flash" id="flash"></div>
+
+<script>
+  // demo：分數+combo 跳動、偶爾 combo 爆發
+  let sL=1240,sR=1860,cL=3,cR=5;
+  function tick(){
+    sL+=Math.round(Math.random()*40); sR+=Math.round(Math.random()*40);
+    document.getElementById('scoreL').textContent=sL.toLocaleString();
+    document.getElementById('scoreR').textContent=sR.toLocaleString();
+    document.getElementById('fillL').style.height=Math.min(100,sL/3000*100)+'%';
+    document.getElementById('fillR').style.height=Math.min(100,sR/3000*100)+'%';
+    document.getElementById('comboL').textContent='🔥 x'+cL;
+    document.getElementById('comboR').textContent='🔥 x'+cR;
+    setTimeout(tick,600);
+  }
+  tick();
+  function burst(side,color){
+    const b=document.getElementById('burst'+side);
+    const n=side==='L'?(cL=Math.min(5,cL+1)):(cR=Math.min(5,cR+1));
+    b.textContent='COMBO x'+n+'!';
+    b.style.animation='none'; void b.offsetWidth; b.style.animation='pop 1s ease-out';
+    const f=document.getElementById('flash');
+    f.style.background='radial-gradient(circle at '+(side==='L'?'25%':'75%')+' 45%,'+color+'55,transparent 60%)';
+    f.style.animation='none'; void f.offsetWidth; f.style.animation='fl .4s ease-out';
+  }
+  setInterval(()=>burst('L','#2b7bff'),2600);
+  setInterval(()=>burst('R','#ff3b3b'),3300);
+</script>
+</body>
+</html>

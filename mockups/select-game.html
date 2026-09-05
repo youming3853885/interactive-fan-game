@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" /><title>選歌畫面 遊戲感 Mockup</title>
+<style>
+  :root{--blue:#2b7bff;--gold:#ffd76b;}
+  *{box-sizing:border-box;} html,body{margin:0;height:100%;}
+  body{height:100vh;overflow:hidden;color:#fff;font-family:system-ui,"Segoe UI",sans-serif;
+    background:#05060d url('assets/select-bg-1.png') center/cover no-repeat;position:relative;}
+  .veil{position:absolute;inset:0;background:radial-gradient(1000px 600px at 50% 42%,transparent,#05060dcc);}
+  /* 演唱會體積光（canvas，screen 混合 → 被照到的地方變亮）*/
+  #lights{position:absolute;inset:0;z-index:2;pointer-events:none;mix-blend-mode:screen;}
+  .school{position:absolute;top:14px;left:18px;font-size:14px;letter-spacing:.06em;color:#dfe6ff;
+    background:#0b1226aa;border:1px solid #ffffff22;border-radius:20px;padding:6px 14px;backdrop-filter:blur(4px);z-index:3;}
+  .school b{color:var(--gold);}
+  .gear{position:absolute;top:14px;right:18px;background:#141b30cc;color:#fff;border:1px solid #ffffff33;
+    border-radius:10px;padding:8px 14px;cursor:pointer;z-index:3;}
+  .kicker{position:absolute;top:16px;left:50%;transform:translateX(-50%);text-align:center;z-index:3;}
+  .kicker .t{letter-spacing:.4em;font-size:13px;color:#aeb4d8;} .kicker .i{font-size:13px;color:#8890b8;}
+
+  .stage{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:min(6vw,90px);
+    top:-16%;z-index:2;}
+  .side{width:120px;height:120px;border-radius:50%;background-size:cover;background-position:center;
+    filter:brightness(.8);transform:scale(.9);border:3px solid #ffffff2a;box-shadow:0 10px 40px #000a;}
+  .disc-wrap{position:relative;width:min(40vh,380px);aspect-ratio:1;}
+  .disc{position:absolute;inset:0;border-radius:50%;background:repeating-radial-gradient(circle at 50% 50%,#0d0d0f 0 2px,#17171b 2px 4px);
+    box-shadow:0 0 0 6px #05050799,0 0 70px #6a3cff66,0 0 120px #2b7bff44;display:flex;align-items:center;justify-content:center;
+    animation:spin 5s linear infinite;}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .label{width:56%;height:56%;border-radius:50%;background-size:cover;background-position:center;box-shadow:inset 0 0 0 4px #00000055;}
+  .chev{width:56px;height:56px;border-radius:50%;border:1px solid #ffffff44;background:#0e1430aa;color:#fff;font-size:26px;cursor:pointer;backdrop-filter:blur(4px);}
+
+  .info{position:absolute;left:0;right:0;bottom:20vh;text-align:center;z-index:3;}
+  .title{font-size:34px;font-weight:900;text-shadow:0 0 24px #6a3cff88;}
+  .sub{margin-top:4px;color:#c7d0f5;font-size:15px;}
+  .meta{margin-top:10px;display:flex;gap:16px;justify-content:center;align-items:center;font-size:15px;}
+  .bpm{color:#7db4ff;font-weight:800;} .stars{color:var(--gold);letter-spacing:2px;} .dur{color:#cdd6ff;}
+  .len{margin-top:10px;display:flex;gap:10px;justify-content:center;align-items:center;font-size:14px;color:#aeb4d8;}
+  .seg{display:flex;border:1px solid #ffffff33;border-radius:999px;overflow:hidden;}
+  .seg button{background:transparent;color:#cdd6ff;border:none;padding:6px 16px;cursor:pointer;}
+  .seg button.on{background:linear-gradient(135deg,var(--blue),#7aa8ff);color:#08122b;font-weight:800;}
+  .ctrls{margin-top:16px;display:flex;gap:14px;justify-content:center;}
+  .btn{border:none;cursor:pointer;border-radius:999px;font-weight:800;font-size:16px;padding:12px 22px;}
+  .preview{background:#0e1430cc;color:#fff;border:1px solid #ffffff33;}
+  .start{background:linear-gradient(135deg,#2b7bff,#ff5db0);color:#08122b;font-size:18px;padding:14px 40px;box-shadow:0 8px 30px #2b7bff66;}
+  .dots{position:absolute;left:0;right:0;bottom:15vh;display:flex;gap:10px;justify-content:center;z-index:3;}
+  .dots i{width:9px;height:9px;border-radius:50%;background:#ffffff33;}
+  .dots i.on{background:var(--gold);box-shadow:0 0 12px var(--gold);}
+
+  /* 音波：最底獨立帶、限高、內容都在其上 → 不重疊 */
+  .eq{position:absolute;left:0;right:0;bottom:0;height:11vh;display:flex;align-items:center;justify-content:space-between;
+    padding:0 3vw;z-index:1;}
+  .col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
+  .col span{width:5px;height:5px;border-radius:50%;background:#173a63;}
+  .col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff;}
+</style>
+</head>
+<body>
+  <div class="veil"></div>
+  <canvas id="lights"></canvas>
+  <div class="school">🏫 澎湖縣湖西鄉龍門國民小學 · <b>畫圈對決</b></div>
+  <button class="gear">⚙ 設定</button>
+  <div class="kicker"><div class="t">選 擇 歌 曲</div><div class="i" id="idx">3 / 4</div></div>
+
+  <div class="stage">
+    <button class="chev" onclick="move(-1)">‹</button>
+    <div class="side" id="prev"></div>
+    <div class="disc-wrap"><div class="disc"><div class="label" id="label"></div></div></div>
+    <div class="side" id="next"></div>
+    <button class="chev" onclick="move(1)">›</button>
+  </div>
+
+  <div class="info">
+    <div class="title" id="title"></div>
+    <div class="sub" id="sub"></div>
+    <div class="meta"><span class="bpm" id="bpm"></span><span class="stars" id="stars"></span><span class="dur" id="dur"></span></div>
+    <div class="len">遊戲長度
+      <span class="seg"><button class="on">2 分鐘</button><button>完整曲</button></span></div>
+    <div class="ctrls"><button class="btn preview" id="prev" onclick="togglePlay()">▶ 試聽</button><button class="btn start">開始遊戲</button></div>
+  </div>
+  <div class="dots" id="dots"></div>
+  <div class="eq" id="eq"></div>
+
+<script>
+  const songs=[
+    {name:'Canon Rock',sub:'搖滾電吉他',bpm:90,stars:2,dur:260,cover:'../音樂影片/Canon Rock 封面.png'},
+    {name:'超跑情人夢',sub:'卜學亮',bpm:120,stars:3,dur:245,cover:'../音樂影片/超跑情人夢.jpg'},
+    {name:'頭文字D',sub:'INITIAL D · Eurobeat',bpm:150,stars:4,dur:178,cover:'../音樂影片/頭文字D.jpg'},
+    {name:'大黃蜂的飛行',sub:'古典 · 快板',bpm:165,stars:5,dur:80,cover:'../音樂影片/大黃蜂的飛行.jpg'},
+  ];
+  let i=2; const el=id=>document.getElementById(id);
+  const fmt=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  const star=n=>'★'.repeat(n)+'☆'.repeat(5-n);
+  function paint(){const s=songs[i];
+    el('label').style.backgroundImage=`url("${s.cover}")`;
+    el('prev').style.backgroundImage=`url("${songs[(i-1+4)%4].cover}")`;
+    el('next').style.backgroundImage=`url("${songs[(i+1)%4].cover}")`;
+    el('title').textContent=s.name; el('sub').textContent=s.sub;
+    el('bpm').textContent=`♪ ${s.bpm} BPM`; el('stars').textContent=`難度 ${star(s.stars)}`;
+    el('dur').textContent=`🕒 時長 ${fmt(s.dur)}`; el('idx').textContent=`${i+1} / 4`;
+    el('dots').innerHTML=songs.map((_,k)=>`<i class="${k===i?'on':''}"></i>`).join('');
+  }
+  function move(d){i=(i+d+4)%4;paint();}
+  let playing=false;
+  function togglePlay(){playing=!playing; el('prev').textContent=playing?'⏸ 停止試聽':'▶ 試聽';}
+
+  // ---- 體積光引擎：光束 + 浮塵粒子(被光照到變亮) + 光落點 ----
+  const lc=document.getElementById('lights'), lx=lc.getContext('2d');
+  function lresize(){lc.width=innerWidth*devicePixelRatio;lc.height=innerHeight*devicePixelRatio;}
+  lresize(); addEventListener('resize',lresize);
+  const BEAMS=[
+    {x:0.12,c:[110,175,255]},{x:0.31,c:[170,110,255]},{x:0.5,c:[255,120,210]},
+    {x:0.69,c:[110,175,255]},{x:0.88,c:[170,110,255]},
+  ];
+  const DUST=Array.from({length:150},(_,k)=>({x:Math.random(),y:Math.random(),
+    z:0.4+Math.random()*0.6,ph:k}));
+  let lt=0,inten=0;
+  function beamAngle(b,i){return Math.sin(lt*0.6+i*1.3)*0.28;} // 掃動
+  function light(){
+    lt+=0.016; inten+=((playing?1:0)-inten)*0.05;
+    const W=lc.width,H=lc.height;
+    lx.clearRect(0,0,W,H);
+    if(inten>0.01){
+      lx.globalCompositeOperation='lighter';
+      BEAMS.forEach((b,i)=>{
+        const ax=b.x*W, ay=-0.05*H, ang=beamAngle(b,i);
+        const topW=0.02*W, botW=0.14*W, len=1.25*H;
+        const bx=ax+Math.sin(ang)*len, by=ay+Math.cos(ang)*len;
+        // 光束（沿軸漸層、外擴）
+        lx.save(); lx.translate(ax,ay); lx.rotate(ang);
+        const g=lx.createLinearGradient(0,0,0,len);
+        g.addColorStop(0,`rgba(${b.c[0]},${b.c[1]},${b.c[2]},${0.45*inten})`);
+        g.addColorStop(1,'rgba(0,0,0,0)');
+        lx.fillStyle=g; lx.filter='blur(14px)';
+        lx.beginPath(); lx.moveTo(-topW,0); lx.lineTo(topW,0); lx.lineTo(botW,len); lx.lineTo(-botW,len); lx.closePath(); lx.fill();
+        lx.restore();
+        // 光落點（被照到變亮）
+        const pg=lx.createRadialGradient(bx,by*0.82,0,bx,by*0.82,0.22*H);
+        pg.addColorStop(0,`rgba(${b.c[0]},${b.c[1]},${b.c[2]},${0.35*inten})`);
+        pg.addColorStop(1,'rgba(0,0,0,0)');
+        lx.filter='none'; lx.fillStyle=pg; lx.fillRect(0,0,W,H);
+      });
+      // 浮塵粒子：靠近光束軸線就變亮
+      DUST.forEach(d=>{
+        d.y+=0.0006/d.z; d.x+=Math.sin(lt*0.5+d.ph)*0.0002; if(d.y>1)d.y=0;
+        const px=d.x*W, py=d.y*H;
+        let bright=0.04;
+        BEAMS.forEach((b,i)=>{const ang=beamAngle(b,i),ax=b.x*W;
+          const axisX=ax+Math.tan(ang)*py; const dist=Math.abs(px-axisX);
+          const near=Math.max(0,1-dist/(0.09*W)); bright+=near*0.9;});
+        lx.fillStyle=`rgba(200,225,255,${Math.min(1,bright)*inten})`;
+        lx.beginPath(); lx.arc(px,py,(1.5+d.z*1.5)*devicePixelRatio,0,7); lx.fill();
+      });
+    }
+    requestAnimationFrame(light);
+  }
+  light();
+  const NB=56,ROWS=11,rc=(ROWS-1)/2;
+  el('eq').innerHTML=Array.from({length:NB}).map(()=>`<div class="col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
+  const cols=[...el('eq').children].map(c=>[...c.children]); let t=0;
+  function frame(){t+=0.06;const beat=0.6+0.4*Math.abs(Math.sin(t*3));
+    for(let k=0;k<NB;k++){const v=Math.pow(beat*(0.35+0.65*Math.abs(Math.sin(t*2+k*0.5))),0.7);
+      const lit=Math.max(1,Math.round(v*ROWS));cols[k].forEach((s,r)=>s.classList.toggle('on',Math.abs(r-rc)<=lit/2));}
+    requestAnimationFrame(frame);}
+  paint();frame();
+</script>
+</body>
+</html>
