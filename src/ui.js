@@ -80,9 +80,10 @@ export function createUI(canvas) {
     if (center && R) {
       const dx = pt.x - center.x, dy = pt.y - center.y;
       const ang = Math.atan2(dy, dx), rad = Math.hypot(dx, dy);
-      const K = 0.8; // 吸附強度：0=全跟真手、1=完全鎖在圈上
-      const nr = rad + (R - rad) * K;
-      mx = center.x + nr * Math.cos(ang); my = center.y + nr * Math.sin(ang);
+      // 減弱吸附：只把手往圓軌拉一點點；且越靠近中心越不拉(避免角度爆走亂甩)。
+      const K = 0.35 * Math.min(1, rad / (R * 0.5));
+      const rx = center.x + R * Math.cos(ang), ry = center.y + R * Math.sin(ang);
+      mx = pt.x + (rx - pt.x) * K; my = pt.y + (ry - pt.y) * K;
     }
     pushTrail(key, { x: mx, y: my });
     drawMeteor(key, color);
@@ -540,14 +541,14 @@ export function createUI(canvas) {
       // 遊玩區把 MV 壓暗（半透明黑遮罩）→ 導引圓/能量條看得超清楚
       ctx.fillStyle = 'rgba(4,5,12,0.62)'; ctx.fillRect(0, 0, W, H);
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
-      drawSchool();
-      drawClock(W / 2, H * 0.11, Math.max(0, Math.ceil(state.timeLeft))); // 遊戲式電子鐘
-      drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / (state.maxScore || 3000)));
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
-      drawFrameEq(state.spectrum, maxMult); // 上下點陣音波外框（隨音樂+combo）
+      drawFrameEq(state.spectrum, maxMult); // 上下點陣音波外框（畫在最底，HUD 文字疊其上）
+      drawSchool();                                                        // 校名（最上層之一）
+      drawClock(W / 2, H * 0.11, Math.max(0, Math.ceil(state.timeLeft))); // 遊戲式電子鐘
+      drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭

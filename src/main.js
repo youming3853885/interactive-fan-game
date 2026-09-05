@@ -72,18 +72,24 @@ let scoreS = newScore();
 const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
 const rotS = { lastAngle: null }; // 單人單手
-// 手部顯示平滑（EMA 去抖，只影響畫面亮點/就位判定，不影響轉速計分）
-const smA = { x: null, y: null, miss: 0 }, smB = { x: null, y: null, miss: 0 }, smS = { x: null, y: null, miss: 0 };
-const SMOOTH = 0.55; // 手部顯示平滑：越大越跟手(近1:1)、越小越穩
-const COAST = 10;    // 偵測掉幀時最多沿用上一位置的幀數（避免閃爍）
-function smoothPoint(s, pt, a) {
-  if (pt) {
-    if (s.x == null) { s.x = pt.x; s.y = pt.y; } else { s.x += a * (pt.x - s.x); s.y += a * (pt.y - s.y); }
-    s.miss = 0; return { x: s.x, y: s.y };
-  }
-  // 未偵測到：短暫沿用上一位置，超過 COAST 幀才真的消失
-  if (s.x != null && ++s.miss <= COAST) return { x: s.x, y: s.y };
-  s.x = null; return null;
+// 手部顯示去抖：One Euro 自適應濾波（慢動作重壓雜訊=穩、快動作放行=跟手不延遲）。
+// 只影響畫面亮點/就位判定，不影響轉速計分。
+const smA = newEuro(), smB = newEuro(), smS = newEuro();
+const COAST = 8; // 偵測掉幀時最多沿用上一位置的幀數
+const EURO_MINCUT = 1.7, EURO_BETA = 0.02, EURO_DCUT = 1.0;
+function newEuro() { return { x: null, y: null, px: 0, py: 0, dx: 0, dy: 0, miss: 0 }; }
+function smoothPoint(s, pt, dt) {
+  if (!pt) { if (s.x != null && ++s.miss <= COAST) return { x: s.x, y: s.y }; s.x = null; return null; }
+  s.miss = 0;
+  if (s.x == null) { s.x = pt.x; s.y = pt.y; s.px = pt.x; s.py = pt.y; s.dx = 0; s.dy = 0; return { x: s.x, y: s.y }; }
+  const d = Math.max(dt, 0.001);
+  const alpha = (cut) => { const tau = 1 / (2 * Math.PI * cut); return 1 / (1 + tau / d); };
+  const rdx = (pt.x - s.px) / d, rdy = (pt.y - s.py) / d; s.px = pt.x; s.py = pt.y;
+  const ad = alpha(EURO_DCUT); s.dx += ad * (rdx - s.dx); s.dy += ad * (rdy - s.dy);
+  const ax = alpha(EURO_MINCUT + EURO_BETA * Math.abs(s.dx));
+  const ay = alpha(EURO_MINCUT + EURO_BETA * Math.abs(s.dy));
+  s.x += ax * (pt.x - s.x); s.y += ay * (pt.y - s.y);
+  return { x: s.x, y: s.y };
 }
 const readyState = { need: READY_NEED, A: { hold: 0, ready: false }, B: { hold: 0, ready: false } };
 let ended = false;
@@ -207,14 +213,14 @@ async function loop(pose) {
     if (mode === 'single') {
       const arm = pickArm(await pose.readFull());
       if (arm) { omegaS = omegaScreen(rotS, arm.wrist, arm.shoulder, toCanvasFull, dt); handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
-      handS = smoothPoint(smS, handS, SMOOTH);
+      handS = smoothPoint(smS, handS, dt);
     } else {
       // 左右半邊各自偵測 → 保證每邊各抓到一位玩家（螢幕左=A、右=B）。
       const armA = pickArm(await pose.readHalf('A'));
       const armB = pickArm(await pose.readHalf('B'));
       if (armA) { omegaA = omegaScreen(rotA, armA.wrist, armA.shoulder, (p) => toCanvas(p, 'A'), dt); handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
       if (armB) { omegaB = omegaScreen(rotB, armB.wrist, armB.shoulder, (p) => toCanvas(p, 'B'), dt); handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
-      handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
+      handA = smoothPoint(smA, handA, dt); handB = smoothPoint(smB, handB, dt);
     }
   }
 
