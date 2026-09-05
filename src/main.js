@@ -65,6 +65,14 @@ const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
 const rotL = { lastAngle: null };
 const rotR = { lastAngle: null };
+// 手部顯示平滑（EMA 去抖，只影響畫面亮點/就位判定，不影響轉速計分）
+const smA = { x: null, y: null }, smB = { x: null, y: null }, smL = { x: null, y: null }, smR = { x: null, y: null };
+const SMOOTH = 0.35; // 越小越穩但越延遲
+function smoothPoint(s, pt, a) {
+  if (!pt) { s.x = null; return null; }
+  if (s.x == null) { s.x = pt.x; s.y = pt.y; } else { s.x += a * (pt.x - s.x); s.y += a * (pt.y - s.y); }
+  return { x: s.x, y: s.y };
+}
 const readyState = { need: READY_NEED, A: { hold: 0, ready: false }, B: { hold: 0, ready: false } };
 let ended = false;
 let last = performance.now();
@@ -175,12 +183,14 @@ async function loop(pose) {
     const pickR = f && f.rightWrist && f.rightShoulder && f.rightWrist.score > 0.3 ? { wrist: f.rightWrist, shoulder: f.rightShoulder } : null;
     if (pickL) { const ang = wristAngle(pickL.wrist, pickL.shoulder); const r = trackRotation(rotL, ang, dt); rotL.lastAngle = r.state.lastAngle; omegaL = r.omega; handL = toCanvasFull(pickL.wrist); } else rotL.lastAngle = null;
     if (pickR) { const ang = wristAngle(pickR.wrist, pickR.shoulder); const r = trackRotation(rotR, ang, dt); rotR.lastAngle = r.state.lastAngle; omegaR = r.omega; handR = toCanvasFull(pickR.wrist); } else rotR.lastAngle = null;
+    handL = smoothPoint(smL, handL, SMOOTH); handR = smoothPoint(smR, handR, SMOOTH);
     handA = handL; handB = handR;
   } else {
     const { A, B } = await pose.read();
     const armA = pickArm(A), armB = pickArm(B);
     if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
     if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
+    handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
   }
 
   if (phase === 'select') {
@@ -188,7 +198,7 @@ async function loop(pose) {
     sendStop();
   } else if (phase === 'ready') {
     if (mode === 'single') {
-      const both = !!(handL && handR);
+      const both = ui.handInTarget(handL, 'L') && ui.handInTarget(handR, 'R');
       readyState.A = { ...updateHold(readyState.A.hold, both, dt, READY_NEED) };
       ui.drawReadySingle({ need: READY_NEED, hold: readyState.A.hold, ready: readyState.A.ready, handL, handR });
       if (readyState.A.ready) startPlaying();

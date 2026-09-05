@@ -215,17 +215,30 @@ export function createUI(canvas) {
     }
   }
 
-  // 單人準備：不分割，中央虛線人形輪廓 + 左右手目標環；雙手都被鏡頭看到才倒數。
+  // 單人左右手目標圈座標（draw 與 hit-test 共用），回傳 canvas 像素。
+  function singleTargets() {
+    const W = canvas.width, H = canvas.height, cx = W / 2;
+    return { r: H * 0.08, L: { x: cx - W * 0.20, y: H * 0.30 }, R: { x: cx + W * 0.20, y: H * 0.30 } };
+  }
+  // 手是否放進對應目標圈（容忍 1.3×半徑）。
+  function handInTarget(hand, side) {
+    if (!hand) return false;
+    const t = singleTargets(), c = side === 'L' ? t.L : t.R;
+    return Math.hypot(hand.x - c.x, hand.y - c.y) <= t.r * 1.3;
+  }
+
+  // 單人準備：不分割，中央虛線人形輪廓 + 左右手目標圈；雙手都放進圈內才倒數。
   // state = { need, hold, ready, handL, handR }
   function drawReadySingle(state) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
-    centerText('站到鏡頭前，舉起左右手讓鏡頭看到你，維持 5 秒開始', 0.08, 0.032, '#fff');
+    centerText('把左右手分別放進兩個圈圈，維持 5 秒開始', 0.08, 0.032, '#fff');
 
     const cx = W / 2;
     const headY = H * 0.30, headR = H * 0.055;
     const shoulderY = H * 0.40, hipY = H * 0.64;
-    const handLx = cx - W * 0.15, handRx = cx + W * 0.15, handY = H * 0.24;
+    const t = singleTargets();
+    const handLx = t.L.x, handRx = t.R.x, handY = t.L.y;
 
     // 虛線人形輪廓
     ctx.save();
@@ -241,22 +254,22 @@ export function createUI(canvas) {
     ctx.stroke();
     ctx.restore();
 
-    // 左右手目標環：被偵測到就點亮
-    for (const [hand, hx, color, label] of [[state.handL, handLx, colorA, '左手'], [state.handR, handRx, colorB, '右手']]) {
-      const on = !!hand;
-      ctx.beginPath(); ctx.arc(hx, handY, H * 0.05, 0, Math.PI * 2);
+    // 左右手目標圈：手放進圈內才點亮
+    const lIn = handInTarget(state.handL, 'L'), rIn = handInTarget(state.handR, 'R');
+    for (const [inTgt, hx, color, label] of [[lIn, handLx, colorA, '左手'], [rIn, handRx, colorB, '右手']]) {
+      ctx.beginPath(); ctx.arc(hx, handY, t.r, 0, Math.PI * 2);
       ctx.save();
-      if (on) { ctx.fillStyle = color + '55'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 30; }
-      ctx.setLineDash(on ? [] : [10, 8]);
-      ctx.strokeStyle = on ? color : '#ffffff88'; ctx.lineWidth = on ? 6 : 4; ctx.stroke();
+      if (inTgt) { ctx.fillStyle = color + '55'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 30; }
+      ctx.setLineDash(inTgt ? [] : [10, 8]);
+      ctx.strokeStyle = inTgt ? color : '#ffffff88'; ctx.lineWidth = inTgt ? 6 : 4; ctx.stroke();
       ctx.restore();
-      ctx.fillStyle = on ? color : '#ffffffaa'; ctx.font = `bold ${Math.round(H * 0.026)}px system-ui`;
+      ctx.fillStyle = inTgt ? color : '#ffffffaa'; ctx.font = `bold ${Math.round(H * 0.026)}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(on ? '已偵測 ' + label : '舉起 ' + label, hx, handY + H * 0.085);
+      ctx.fillText(inTgt ? label + ' 就位' : '把' + label + '放進來', hx, handY + t.r + H * 0.04);
     }
 
-    // 雙手都到 → 大倒數（軀幹中央）
-    const bothOn = state.handL && state.handR;
+    // 雙手都就位 → 大倒數（軀幹中央）
+    const bothOn = lIn && rIn;
     const remain = Math.max(0, Math.ceil(state.need - state.hold));
     const label = state.ready ? 'GO!' : (bothOn ? String(remain) : '');
     if (label) {
@@ -286,6 +299,7 @@ export function createUI(canvas) {
   const api = {
     drawReady,
     drawReadySingle,
+    handInTarget,
     clear,
     onComboBurst: null,
     boxHit(hand, side) {
