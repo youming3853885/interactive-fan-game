@@ -49,40 +49,54 @@ export function createSelectScreen(hud, onPick) {
 
   const $ = (id) => screen.querySelector('#' + id);
 
-  // ---- 底部波形：中央低頻→兩側高頻，漣漪由中心對稱擴散 + 空間平滑，隨頻譜律動 ----
-  const NB = 56, ROWS = 15;
-  const rowCenter = (ROWS - 1) / 2, colCenter = (NB - 1) / 2;
-  const WL = 28, WAVE_AMP = 3, WAVE_SPEED = 3.6, AU_INF = 0.7; // 波長/幅度/速度/音樂影響
-  $('ssEq').innerHTML = Array.from({ length: NB })
-    .map(() => `<div class="ss-col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
-  const eqCols = Array.from($('ssEq').querySelectorAll('.ss-col')).map((c) => Array.from(c.children));
-  const amp = new Float32Array(NB);
+  // ---- 底部波形：鏡像柱狀頻譜(版本C)，中線上下對稱、漸層、log 頻率讓旋律清楚 ----
+  const N_BARS = 72;
+  const barAmp = new Float32Array(N_BARS);
+  const hueFor = (k) => 200 - (k / N_BARS) * 260; // 低頻藍→高頻粉紫
+  const eqCanvas = document.createElement('canvas');
+  eqCanvas.className = 'ss-eqcanvas';
+  $('ssEq').appendChild(eqCanvas);
+  const eqCtx = eqCanvas.getContext('2d');
+  function eqResize() {
+    const r = eqCanvas.getBoundingClientRect();
+    eqCanvas.width = Math.max(1, r.width * devicePixelRatio);
+    eqCanvas.height = Math.max(1, r.height * devicePixelRatio);
+  }
+  eqResize();
+  window.addEventListener('resize', eqResize);
+  function roundRect(ctx, x, y, w, h, r) {
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath(); ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+  }
   let analyser = null;
   let freq = null;
-  let eqT = 0;
   function eqLoop() {
-    eqT += 0.05;
+    const W = eqCanvas.width, H = eqCanvas.height, mid = H / 2;
+    eqCtx.clearRect(0, 0, W, H);
     if (analyser) {
       analyser.getByteFrequencyData(freq);
-      const usable = Math.floor(freq.length * 0.7);
-      // 中央=低頻、兩側=高頻：依離中心距離取頻段；時間 lerp 更平滑
-      for (let k = 0; k < NB; k++) {
-        const freqFrac = Math.abs(k - colCenter) / colCenter;
-        const v = freq[Math.floor(freqFrac * usable)] / 255;
-        amp[k] += (v - amp[k]) * 0.3;
+      const maxBin = freq.length * 0.75;
+      for (let k = 0; k < N_BARS; k++) {
+        const bin = Math.min(freq.length - 1, Math.floor(Math.pow(maxBin, k / (N_BARS - 1)))); // log 頻率
+        const v = freq[bin] / 255;
+        barAmp[k] += (v - barAmp[k]) * 0.35;
       }
-      // 空間平滑 + 由中心對稱擴散的漣漪
-      for (let k = 0; k < NB; k++) {
-        const a = amp[Math.max(0, k - 1)], b = amp[k], c = amp[Math.min(NB - 1, k + 1)];
-        const sm = (a + 2 * b + c) / 4;
-        const d = Math.abs(k - colCenter);
-        const wave = Math.sin(d * (2 * Math.PI / WL) - eqT * WAVE_SPEED);
-        const center = rowCenter + WAVE_AMP * wave;
-        const thick = (1 - AU_INF) * 2 + AU_INF * sm * ROWS;
-        const half = Math.max(0.5, thick / 2);
-        const col = eqCols[k];
-        for (let r = 0; r < ROWS; r++) col[r].classList.toggle('on', Math.abs(r - center) <= half);
+      const gap = 2 * devicePixelRatio, bw = W / N_BARS - gap;
+      for (let k = 0; k < N_BARS; k++) {
+        const h = barAmp[k] * H * 0.46, x = k * (W / N_BARS);
+        const g = eqCtx.createLinearGradient(0, mid - h, 0, mid + h);
+        g.addColorStop(0, `hsl(${hueFor(k)},95%,72%)`);
+        g.addColorStop(0.5, `hsl(${hueFor(k)},90%,58%)`);
+        g.addColorStop(1, `hsl(${hueFor(k)},95%,72%)`);
+        eqCtx.fillStyle = g;
+        eqCtx.shadowColor = `hsl(${hueFor(k)},90%,60%)`;
+        eqCtx.shadowBlur = 10 * devicePixelRatio;
+        roundRect(eqCtx, x, mid - h, bw, Math.max(bw, h * 2), bw / 2);
+        eqCtx.fill();
       }
+      eqCtx.shadowBlur = 0;
     }
     requestAnimationFrame(eqLoop);
   }
@@ -176,7 +190,7 @@ export function createSelectScreen(hud, onPick) {
   addEventListener('keydown', onKey);
 
   return {
-    show(list) { tracks = list; i = 0; render(); screen.style.display = 'flex'; },
+    show(list) { tracks = list; i = 0; screen.style.display = 'flex'; eqResize(); render(); },
     hide() { stopPreview(); screen.style.display = 'none'; },
   };
 }
@@ -190,12 +204,9 @@ function injectStyle() {
     gap:0;background:radial-gradient(1200px 600px at 50% -10%,#1c2036 0,transparent 60%),
     radial-gradient(900px 500px at 50% 120%,#241a2e 0,transparent 60%),#0b0b12;pointer-events:auto;color:#fff;
     font-family:system-ui,"Segoe UI",sans-serif;z-index:5;}
-  .ss-eq{position:absolute;inset:auto 0 0 0;height:13vh;display:flex;align-items:center;
-    justify-content:space-between;padding:0 3vw;opacity:.85;pointer-events:none;z-index:0;}
+  .ss-eq{position:absolute;inset:auto 0 0 0;height:15vh;padding:0 2vw;pointer-events:none;z-index:0;}
+  .ss-eqcanvas{width:100%;height:100%;display:block;}
   .ss-top,.ss-stage,.ss-meta,.ss-controls,.ss-dots{position:relative;z-index:1;}
-  .ss-col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
-  .ss-col span{width:6px;height:6px;border-radius:50%;background:#173a63;transition:background .05s,box-shadow .05s;}
-  .ss-col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff,0 0 3px #cdefff;}
   .ss-top{position:absolute;top:26px;text-align:center;}
   .ss-kicker{letter-spacing:.4em;font-size:13px;color:#aeb4d8;}
   .ss-idx{margin-top:6px;font-size:14px;color:#8890b8;}

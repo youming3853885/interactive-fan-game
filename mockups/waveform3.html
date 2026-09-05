@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" /><title>音波 3 版 — 音樂遊戲風頻譜</title>
+<style>
+  html,body{margin:0;background:#06070d;color:#cfe;font-family:system-ui,sans-serif;}
+  h3{margin:16px 0 4px;text-align:center;font-weight:700;letter-spacing:.05em;color:#bcd;}
+  h3 small{color:#7a86a8;font-weight:400;font-size:13px;}
+  canvas{display:block;width:100%;height:26vh;background:linear-gradient(180deg,#0a0e1c,#0e1330);border-top:1px solid #ffffff10;}
+</style>
+</head>
+<body>
+  <h3>版本 A — 平滑柱狀頻譜 <small>底部・低頻左→高頻右・漸層+峰值頂蓋（最清楚看頻率）</small></h3>
+  <canvas id="a"></canvas>
+  <h3>版本 B — 環形頻譜 <small>繞著唱片一圈・低頻起、旋律在環上跳動（最有音樂遊戲味）</small></h3>
+  <canvas id="b"></canvas>
+  <h3>版本 C — 鏡像柱狀 <small>中線上下對稱・平滑漸層（sleek）</small></h3>
+  <canvas id="c"></canvas>
+<script>
+  const N = 72;
+  function dpi(cv){ const r=cv.getBoundingClientRect(); cv.width=r.width*devicePixelRatio; cv.height=r.height*devicePixelRatio; return cv.getContext('2d'); }
+  const A=document.getElementById('a'), B=document.getElementById('b'), C=document.getElementById('c');
+  let ca=dpi(A), cb=dpi(B), cc=dpi(C);
+  addEventListener('resize',()=>{ca=dpi(A);cb=dpi(B);cc=dpi(C);});
+
+  // 合成頻譜：貝斯拍點(左) + 移動旋律(中) + 高頻閃爍(右)，log 攤開
+  const data=new Float32Array(N);
+  function spectrum(t){
+    const beat=Math.max(0,Math.sin(t*3));
+    const melody=(0.42+0.22*Math.sin(t*0.8))*N;
+    for(let k=0;k<N;k++){
+      const bass=Math.exp(-(k*k)/(2*40))*(0.45+0.8*beat);
+      const mel=Math.exp(-((k-melody)**2)/(2*18))*(0.55+0.45*Math.abs(Math.sin(t*5)));
+      const high=k>N*0.68? 0.18*Math.abs(Math.sin(t*13+k)) : 0;
+      const target=Math.min(1, bass+mel*0.95+high);
+      data[k]+=(target-data[k])*0.35;                 // 時間平滑
+    }
+  }
+  const hue=k=>200 - (k/N)*260;                        // 低頻藍→高頻粉紫
+
+  const peaks=new Float32Array(N);
+  function drawA(ctx,W,H){
+    ctx.clearRect(0,0,W,H);
+    const gap=2*devicePixelRatio, bw=W/N-gap;
+    for(let k=0;k<N;k++){
+      const v=data[k]; peaks[k]=Math.max(v,peaks[k]-0.012);
+      const x=k*(W/N), h=v*H*0.92;
+      const grad=ctx.createLinearGradient(0,H,0,H-h);
+      grad.addColorStop(0,`hsl(${hue(k)},90%,55%)`); grad.addColorStop(1,`hsl(${hue(k)},95%,72%)`);
+      ctx.fillStyle=grad; ctx.shadowColor=`hsl(${hue(k)},90%,60%)`; ctx.shadowBlur=12*devicePixelRatio;
+      roundRect(ctx,x,H-h,bw,h,bw/2); ctx.fill();
+      ctx.shadowBlur=0; ctx.fillStyle='#fff';
+      const py=H-peaks[k]*H*0.92; ctx.fillRect(x,py,bw,2*devicePixelRatio);
+    }
+  }
+  function drawB(ctx,W,H,t){
+    ctx.clearRect(0,0,W,H);
+    const cx=W/2, cy=H/2, R0=Math.min(W,H)*0.22, len=Math.min(W,H)*0.26;
+    // 唱片
+    ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(cx,cy,R0*0.9,0,7); ctx.fill();
+    ctx.strokeStyle='#333'; for(let r=0.3;r<0.9;r+=0.12){ctx.beginPath();ctx.arc(cx,cy,R0*r,0,7);ctx.stroke();}
+    for(let k=0;k<N;k++){
+      const v=data[k], ang=(k/N)*Math.PI*2 - Math.PI/2 + t*0.15;
+      const r1=R0, r2=R0+v*len;
+      ctx.strokeStyle=`hsl(${hue(k)},90%,62%)`; ctx.lineWidth=3*devicePixelRatio; ctx.lineCap='round';
+      ctx.shadowColor=ctx.strokeStyle; ctx.shadowBlur=10*devicePixelRatio;
+      ctx.beginPath();
+      ctx.moveTo(cx+Math.cos(ang)*r1, cy+Math.sin(ang)*r1);
+      ctx.lineTo(cx+Math.cos(ang)*r2, cy+Math.sin(ang)*r2); ctx.stroke();
+    }
+    ctx.shadowBlur=0;
+  }
+  function drawC(ctx,W,H){
+    ctx.clearRect(0,0,W,H);
+    const gap=2*devicePixelRatio, bw=W/N-gap, mid=H/2;
+    for(let k=0;k<N;k++){
+      const v=data[k], x=k*(W/N), h=v*H*0.46;
+      const grad=ctx.createLinearGradient(0,mid-h,0,mid+h);
+      grad.addColorStop(0,`hsl(${hue(k)},95%,72%)`); grad.addColorStop(.5,`hsl(${hue(k)},90%,58%)`); grad.addColorStop(1,`hsl(${hue(k)},95%,72%)`);
+      ctx.fillStyle=grad; ctx.shadowColor=`hsl(${hue(k)},90%,60%)`; ctx.shadowBlur=12*devicePixelRatio;
+      roundRect(ctx,x,mid-h,bw,h*2,bw/2); ctx.fill();
+    }
+    ctx.shadowBlur=0;
+  }
+  function roundRect(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+
+  let t=0;
+  function frame(){ t+=0.03; spectrum(t);
+    drawA(ca,A.width,A.height); drawB(cb,B.width,B.height,t); drawC(cc,C.width,C.height);
+    requestAnimationFrame(frame);
+  }
+  frame();
+</script>
+</body>
+</html>
