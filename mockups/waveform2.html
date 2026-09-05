@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" /><title>音波 — 波浪感</title>
+<style>
+  html,body{margin:0;height:100%;background:#070b16;color:#cfe;font-family:system-ui,sans-serif;}
+  body{display:flex;flex-direction:column;}
+  .note{position:fixed;top:16px;left:0;right:0;text-align:center;color:#8fb;font-size:14px;opacity:.85;}
+  .panel{height:34vh;position:relative;display:flex;align-items:center;justify-content:space-between;
+    padding:0 3vw;background:linear-gradient(180deg,#0a1024,#0e1430);border-top:1px solid #ffffff10;margin-top:60px;}
+  .mid{position:absolute;left:3vw;right:3vw;top:50%;height:1px;background:#ffffff10;}
+  .col{display:flex;flex-direction:column;justify-content:center;gap:3px;height:100%;}
+  .col span{width:6px;height:6px;border-radius:50%;background:#123049;}
+  .col span.on{background:#5fe0ff;box-shadow:0 0 8px #5fe0ff,0 0 3px #cdefff;}
+  .ctrl{margin:22px auto;display:flex;gap:22px;align-items:center;flex-wrap:wrap;justify-content:center;}
+  label{display:flex;flex-direction:column;font-size:12px;color:#9ab;gap:4px;align-items:center;}
+</style>
+</head>
+<body>
+  <div class="note">低頻在正中央(最厚)→往兩側高頻(漸薄)；漣漪從中心向兩邊擴散 + 隨音樂律動</div>
+  <div class="panel"><div class="mid"></div><div id="eq" style="display:flex;width:100%;justify-content:space-between;height:100%;align-items:center;"></div></div>
+  <div class="ctrl">
+    <label>波浪速度<input id="spd" type="range" min="1" max="14" value="6"></label>
+    <label>波浪幅度<input id="amp" type="range" min="0" max="5" value="3" step="0.5"></label>
+    <label>波長<input id="wl" type="range" min="10" max="60" value="28"></label>
+    <label>音樂影響<input id="au" type="range" min="0" max="100" value="70"></label>
+  </div>
+<script>
+  const NB=56, ROWS=15, rowCenter=(ROWS-1)/2, colCenter=(NB-1)/2;
+  const eq=document.getElementById('eq');
+  eq.innerHTML=Array.from({length:NB}).map(()=>`<div class="col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
+  const cols=[...eq.children].map(c=>[...c.children]);
+  // 合成「頻譜」：低頻能量高。amp[k] 依離中心距離對到頻段(中心=低頻)
+  const amp=new Float32Array(NB);
+  let t=0;
+  const g=id=>+document.getElementById(id).value;
+  function frame(){
+    t+=0.05;
+    const spd=g('spd')*0.1, waveAmp=g('amp'), wl=g('wl'), auInf=g('au')/100;
+    const beat=0.55+0.45*Math.abs(Math.sin(t*3));
+    for(let k=0;k<NB;k++){
+      const freqFrac=Math.abs(k-colCenter)/colCenter;        // 0=中央(低頻) .. 1=邊緣(高頻)
+      const env=Math.pow(1-freqFrac,1.1);                     // 低頻能量高
+      const target=env*beat*(0.4+0.6*Math.abs(Math.sin(t*1.7+freqFrac*4)));
+      amp[k]+=(target-amp[k])*0.15;
+    }
+    // 空間平滑 → 連續波浪
+    const sm=new Float32Array(NB);
+    for(let k=0;k<NB;k++){
+      const a=amp[Math.max(0,k-1)],b=amp[k],c=amp[Math.min(NB-1,k+1)];
+      sm[k]=(a+2*b+c)/4;
+    }
+    for(let k=0;k<NB;k++){
+      const d=Math.abs(k-colCenter);                          // 離中心距離
+      // 漣漪由中心向兩側對稱擴散（用 d 當相位 → 左右對稱）
+      const wave=Math.sin(d*(2*Math.PI/wl) - t*spd*6);
+      const center=rowCenter + waveAmp*wave;
+      const thick=(1-auInf)*2 + auInf*sm[k]*ROWS;             // 厚度：中央低頻最厚
+      const half=Math.max(0.5, thick/2);
+      cols[k].forEach((s,r)=> s.classList.toggle('on', Math.abs(r-center) <= half));
+    }
+    requestAnimationFrame(frame);
+  }
+  frame();
+</script>
+</body>
+</html>

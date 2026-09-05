@@ -49,23 +49,39 @@ export function createSelectScreen(hud, onPick) {
 
   const $ = (id) => screen.querySelector('#' + id);
 
-  // ---- 底部波形：點陣 LED，中線往上下對稱點亮，依頻譜即時反饋 ----
-  const NB = 48, ROWS = 13;             // 欄數 × 每欄點數
-  const rowCenter = (ROWS - 1) / 2;
+  // ---- 底部波形：中央低頻→兩側高頻，漣漪由中心對稱擴散 + 空間平滑，隨頻譜律動 ----
+  const NB = 56, ROWS = 15;
+  const rowCenter = (ROWS - 1) / 2, colCenter = (NB - 1) / 2;
+  const WL = 28, WAVE_AMP = 3, WAVE_SPEED = 3.6, AU_INF = 0.7; // 波長/幅度/速度/音樂影響
   $('ssEq').innerHTML = Array.from({ length: NB })
     .map(() => `<div class="ss-col">${'<span></span>'.repeat(ROWS)}</div>`).join('');
   const eqCols = Array.from($('ssEq').querySelectorAll('.ss-col')).map((c) => Array.from(c.children));
+  const amp = new Float32Array(NB);
   let analyser = null;
   let freq = null;
+  let eqT = 0;
   function eqLoop() {
+    eqT += 0.05;
     if (analyser) {
       analyser.getByteFrequencyData(freq);
       const usable = Math.floor(freq.length * 0.7);
+      // 中央=低頻、兩側=高頻：依離中心距離取頻段；時間 lerp 更平滑
       for (let k = 0; k < NB; k++) {
-        const v = freq[Math.floor((k / (NB - 1)) * usable)] / 255; // 左低頻→右高頻
-        const lit = Math.max(1, Math.round(Math.pow(v, 0.7) * ROWS));             // 至少中央 1 點
+        const freqFrac = Math.abs(k - colCenter) / colCenter;
+        const v = freq[Math.floor(freqFrac * usable)] / 255;
+        amp[k] += (v - amp[k]) * 0.3;
+      }
+      // 空間平滑 + 由中心對稱擴散的漣漪
+      for (let k = 0; k < NB; k++) {
+        const a = amp[Math.max(0, k - 1)], b = amp[k], c = amp[Math.min(NB - 1, k + 1)];
+        const sm = (a + 2 * b + c) / 4;
+        const d = Math.abs(k - colCenter);
+        const wave = Math.sin(d * (2 * Math.PI / WL) - eqT * WAVE_SPEED);
+        const center = rowCenter + WAVE_AMP * wave;
+        const thick = (1 - AU_INF) * 2 + AU_INF * sm * ROWS;
+        const half = Math.max(0.5, thick / 2);
         const col = eqCols[k];
-        for (let r = 0; r < ROWS; r++) col[r].classList.toggle('on', Math.abs(r - rowCenter) <= lit / 2);
+        for (let r = 0; r < ROWS; r++) col[r].classList.toggle('on', Math.abs(r - center) <= half);
       }
     }
     requestAnimationFrame(eqLoop);
