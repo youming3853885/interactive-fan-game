@@ -72,13 +72,6 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     return boxEl;
   }
 
-  function numInput(value, onInput) {
-    const n = document.createElement('input');
-    n.type = 'number'; n.min = 0; n.step = 1; n.value = value; n.style.width = '70px';
-    n.addEventListener('input', () => onInput(Number(n.value) || 0));
-    return n;
-  }
-
   function barStylePicker() {
     const wrap = document.createElement('div');
     wrap.style.cssText = 'display:flex;gap:8px;';
@@ -119,8 +112,6 @@ export function createSettingsPanel(hud, settings, media, arduino) {
       name.textContent = t.name;
       name.style.cssText = 'font-weight:bold;margin-bottom:4px;';
       block.append(name);
-      block.append(row('開始時間 (秒)', numInput(cfg.start, (v) => { cfg.start = v; changed(); })));
-      block.append(row('停止時間 (秒，0=到結尾)', numInput(cfg.end, (v) => { cfg.end = v; changed(); })));
       block.append(row('音量', slider(0, 100, cfg.volume, (v) => { cfg.volume = v; changed(); })));
       block.append(row('MV 透明度', slider(0, 100, cfg.mvOpacity, (v) => { cfg.mvOpacity = v; changed(); })));
       body.append(block);

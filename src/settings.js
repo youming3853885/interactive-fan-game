@@ -2,22 +2,15 @@
 
 const KEY = 'ifg-settings-v1';
 
-// 每首歌預設：start 0、end 0(=播到自然結尾)、volume 70、mvOpacity 100。
+// 每首歌預設：volume 70、mvOpacity 100。（遊玩時間改由選歌時的 2分鐘/全曲決定，不再有起訖秒數）
 export function defaultTrackSetting() {
-  return { start: 0, end: 0, volume: 70, mvOpacity: 100 };
+  return { volume: 70, mvOpacity: 100 };
 }
 
 export function defaultSettings(trackIds) {
   const perTrack = {};
   for (const id of trackIds) perTrack[id] = defaultTrackSetting();
   return { cameraOpacity: 60, barStyle: 1, perTrack };
-}
-
-// 純函數：影片播放時間到了段尾要不要跳回起點。回傳要 seek 的時間，或 null（不動）。
-// end<=0 代表沒設段尾（播到自然結尾由 loop 屬性接手）。
-export function loopSeekTime(current, start, end) {
-  if (end > 0 && current >= end) return start;
-  return null;
 }
 
 export function loadSettings(trackIds) {

@@ -8,7 +8,8 @@ export async function createPoseReader(video) {
   await tf.setBackend('webgl');
   await tf.ready();
   const model = poseDetection.SupportedModels.MoveNet;
-  const cfg = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
+  // enableSmoothing：開啟內建時間濾波（OneEuro），大幅降低手部抖動/閃爍。
+  const cfg = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING, enableSmoothing: true, minPoseScore: 0.2 };
   const detA = await poseDetection.createDetector(model, cfg);
   const detB = await poseDetection.createDetector(model, cfg);
   const detFull = await poseDetection.createDetector(model, cfg);
@@ -56,7 +57,7 @@ export function pickArm(side) {
   const cands = [
     { wrist: side.leftWrist, shoulder: side.leftShoulder },
     { wrist: side.rightWrist, shoulder: side.rightShoulder },
-  ].filter((c) => c.wrist && c.shoulder && c.wrist.score > 0.3 && c.shoulder.score > 0.3);
+  ].filter((c) => c.wrist && c.shoulder && c.wrist.score > 0.25 && c.shoulder.score > 0.25);
   if (!cands.length) return null;
   // 選手腕舉得最高（y 最小）的那隻
   return cands.sort((a, b) => a.wrist.y - b.wrist.y)[0];

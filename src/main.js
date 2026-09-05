@@ -65,12 +65,17 @@ const rotB = { lastAngle: null };
 const rotL = { lastAngle: null };
 const rotR = { lastAngle: null };
 // 手部顯示平滑（EMA 去抖，只影響畫面亮點/就位判定，不影響轉速計分）
-const smA = { x: null, y: null }, smB = { x: null, y: null }, smL = { x: null, y: null }, smR = { x: null, y: null };
-const SMOOTH = 0.35; // 越小越穩但越延遲
+const smA = { x: null, y: null, miss: 0 }, smB = { x: null, y: null, miss: 0 }, smL = { x: null, y: null, miss: 0 }, smR = { x: null, y: null, miss: 0 };
+const SMOOTH = 0.3;  // 越小越穩但越延遲
+const COAST = 10;    // 偵測掉幀時最多沿用上一位置的幀數（避免閃爍）
 function smoothPoint(s, pt, a) {
-  if (!pt) { s.x = null; return null; }
-  if (s.x == null) { s.x = pt.x; s.y = pt.y; } else { s.x += a * (pt.x - s.x); s.y += a * (pt.y - s.y); }
-  return { x: s.x, y: s.y };
+  if (pt) {
+    if (s.x == null) { s.x = pt.x; s.y = pt.y; } else { s.x += a * (pt.x - s.x); s.y += a * (pt.y - s.y); }
+    s.miss = 0; return { x: s.x, y: s.y };
+  }
+  // 未偵測到：短暫沿用上一位置，超過 COAST 幀才真的消失
+  if (s.x != null && ++s.miss <= COAST) return { x: s.x, y: s.y };
+  s.x = null; return null;
 }
 const readyState = { need: READY_NEED, A: { hold: 0, ready: false }, B: { hold: 0, ready: false } };
 let ended = false;
@@ -123,12 +128,7 @@ async function boot() {
   const pose = await createPoseReader(video);
   loading.progress(0.9);
 
-  // 設定（並套用內建預設起播秒數，如超跑情人夢第 5 秒）
   settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
-  for (const t of BUILTIN_TRACKS) {
-    const ps = settings.perTrack[t.id];
-    if (t.start && ps && ps.start === 0) ps.start = t.start;
-  }
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
   sp = createSettingsPanel(hud, settings, media, { btn: arduinoBtn, status: arduinoStatus });
@@ -174,8 +174,8 @@ async function loop(pose) {
   let omegaA = 0, omegaB = 0, omegaL = 0, omegaR = 0;
   if (mode === 'single' && phase !== 'select') {
     const f = await pose.readFull();
-    const pickL = f && f.leftWrist && f.leftShoulder && f.leftWrist.score > 0.3 ? { wrist: f.leftWrist, shoulder: f.leftShoulder } : null;
-    const pickR = f && f.rightWrist && f.rightShoulder && f.rightWrist.score > 0.3 ? { wrist: f.rightWrist, shoulder: f.rightShoulder } : null;
+    const pickL = f && f.leftWrist && f.leftShoulder && f.leftWrist.score > 0.25 ? { wrist: f.leftWrist, shoulder: f.leftShoulder } : null;
+    const pickR = f && f.rightWrist && f.rightShoulder && f.rightWrist.score > 0.25 ? { wrist: f.rightWrist, shoulder: f.rightShoulder } : null;
     if (pickL) { const ang = wristAngle(pickL.wrist, pickL.shoulder); const r = trackRotation(rotL, ang, dt); rotL.lastAngle = r.state.lastAngle; omegaL = r.omega; handL = toCanvasFull(pickL.wrist); } else rotL.lastAngle = null;
     if (pickR) { const ang = wristAngle(pickR.wrist, pickR.shoulder); const r = trackRotation(rotR, ang, dt); rotR.lastAngle = r.state.lastAngle; omegaR = r.omega; handR = toCanvasFull(pickR.wrist); } else rotR.lastAngle = null;
     handL = smoothPoint(smL, handL, SMOOTH); handR = smoothPoint(smR, handR, SMOOTH);
