@@ -72,11 +72,18 @@ export function createUI(canvas) {
     }
     ctx.restore(); ctx.globalAlpha = 1;
   }
-  // 手：畫在真實偵測位置（近乎跟手），流星尾 + 畫圈時飄散粒子。
-  function drawHandFX(key, pt, color, active) {
+  // 手：角度跟真手(跟手方向)、半徑吸附到圓軌道(穩定不抖)；流星尾 + 畫圈時飄散粒子。
+  function drawHandFX(key, pt, color, active, center, R) {
     const H = canvas.height;
     if (!pt) { pushTrail(key, null); return; }
-    const mx = pt.x, my = pt.y;
+    let mx = pt.x, my = pt.y;
+    if (center && R) {
+      const dx = pt.x - center.x, dy = pt.y - center.y;
+      const ang = Math.atan2(dy, dx), rad = Math.hypot(dx, dy);
+      const K = 0.8; // 吸附強度：0=全跟真手、1=完全鎖在圈上
+      const nr = rad + (R - rad) * K;
+      mx = center.x + nr * Math.cos(ang); my = center.y + nr * Math.sin(ang);
+    }
     pushTrail(key, { x: mx, y: my });
     drawMeteor(key, color);
     if (active) { // 沿路飄散不規則粒子
@@ -530,7 +537,7 @@ export function createUI(canvas) {
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
-        drawHandFX('S', state.hand, colorA, state.active); // 手畫在真實位置（近乎跟手）
+        drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R); // 跟手方向+吸附圓軌
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
           frac: gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false });
         if (state.comboMult > prevCombo.S) { triggerBurst(cx, cy, gold, state.comboMult); flash(colorA); }
@@ -540,7 +547,7 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
-          drawHandFX(side, state[side].hand, color, state[side].active);
+          drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
             frac: gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
             label: '', showLR: false });
