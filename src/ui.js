@@ -19,38 +19,65 @@ export function createUI(canvas) {
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
   const bursts = [];
   let prevCombo = { A: 1, B: 1, S: 1 };
-  // 得分手感：每累積 FLOAT_STEP 分就從得分處噴一個「+N」上浮字
-  const floaters = [];
-  const trails = { S: [], A: [], B: [] };  // 手部拖尾
+  const trails = { S: [], A: [], B: [] };  // 手 marker 流星尾
   const fireworks = [];                     // 結算煙火
-  const FLOAT_STEP = 100;
-  const scoreAcc = { S: 0, A: 0, B: 0 }, prevScoreVal = { S: 0, A: 0, B: 0 };
-  function scoreJuice(key, score, x, y, color) {
-    const prev = prevScoreVal[key]; prevScoreVal[key] = score;
-    if (score < prev) { scoreAcc[key] = 0; return; } // 新局歸零
-    scoreAcc[key] += score - prev;
-    let n = 0;
-    while (scoreAcc[key] >= FLOAT_STEP && n < 3) { // 單幀最多噴 3 個避免爆量
-      scoreAcc[key] -= FLOAT_STEP; n++;
-      floaters.push({ x: x + ((floaters.length % 3) - 1) * canvas.width * 0.02, y, vy: -canvas.height * 0.012, life: 1, color, text: '+' + FLOAT_STEP });
-      if (api.onScoreTick) api.onScoreTick();
+  const judges = [];                         // 判定文字特效 EXCELLENT/GREAT/GOOD
+  // 判定特效（每轉完一圈觸發）：大字彈出 + 上浮 + 淡出，附 +分數。
+  function judge(word, pts, mult, x, y, color) {
+    judges.push({ word, pts, mult, x, y, color, life: 1 });
+  }
+  function drawJudges() {
+    const H = canvas.height;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    for (let i = judges.length - 1; i >= 0; i--) {
+      const j = judges[i]; j.life -= 0.022; j.y -= H * 0.004;
+      if (j.life <= 0) { judges.splice(i, 1); continue; }
+      const pop = Math.min(1, (1 - j.life) * 5), sc = 0.6 + pop * 0.5; // 彈入
+      const col = j.word === 'EXCELLENT' ? '#ffd76b' : j.word === 'GREAT' ? '#4ec3ff' : '#dfe6ff';
+      ctx.save(); ctx.globalAlpha = Math.min(1, j.life * 1.6); ctx.translate(j.x, j.y); ctx.scale(sc, sc);
+      ctx.font = `900 ${Math.round(H * 0.07)}px system-ui`;
+      ctx.lineWidth = 8; ctx.strokeStyle = '#05070f'; ctx.strokeText(j.word, 0, 0);
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 24; ctx.fillText(j.word, 0, 0);
+      ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.04)}px system-ui`;
+      ctx.fillText(`+${j.pts}`, 0, H * 0.055);
+      ctx.restore();
     }
+    ctx.globalAlpha = 1;
   }
   function pushTrail(key, pt) {
     const tr = trails[key];
     if (!pt) { tr.length = 0; return; }
-    tr.push({ x: pt.x, y: pt.y }); if (tr.length > 14) tr.shift();
+    tr.push({ x: pt.x, y: pt.y }); if (tr.length > 22) tr.shift();
   }
-  function drawTrail(key, color) {
+  // 流星尾：頭粗尾細、強發光的漸縮尾巴
+  function drawMeteor(key, color) {
     const tr = trails[key]; if (tr.length < 2) return;
     const H = canvas.height;
-    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 16;
+    ctx.save(); ctx.lineCap = 'round'; ctx.shadowColor = color; ctx.shadowBlur = 24;
     for (let i = 1; i < tr.length; i++) {
-      const f = i / tr.length;
-      ctx.globalAlpha = f * 0.7; ctx.lineWidth = H * 0.02 * f + 2;
+      const f = i / tr.length; // 越接近頭越粗越亮
+      ctx.globalAlpha = f * f * 0.9; ctx.strokeStyle = f > 0.7 ? '#ffffff' : color;
+      ctx.lineWidth = H * 0.03 * f + 1.5;
       ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke();
     }
     ctx.restore(); ctx.globalAlpha = 1;
+  }
+  // 手 marker：鎖在圈上（angle 由 main 依累積角度算），流星尾 + 飄散粒子。
+  function drawMarker(key, cx, cy, R, angle, color, active) {
+    const H = canvas.height, mx = cx + R * Math.cos(angle), my = cy + R * Math.sin(angle);
+    pushTrail(key, { x: mx, y: my });
+    drawMeteor(key, color);
+    if (active) { // 沿路飄散不規則粒子
+      for (let i = 0; i < 3; i++) {
+        const a = Math.random() * Math.PI * 2, s = 1 + Math.random() * 3.5;
+        particles.push({ x: mx, y: my, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 1, color, r: 2 + Math.random() * 3 });
+      }
+    }
+    ctx.save(); ctx.beginPath(); ctx.arc(mx, my, H * 0.05, 0, Math.PI * 2);
+    ctx.fillStyle = '#00000066'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 26;
+    ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke(); ctx.restore();
+    ctx.font = `${Math.round(H * 0.07)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🖐', mx, my);
   }
   // combo 等級 → 全畫面邊框光暈升級（越高越亮越華麗）
   function drawComboAura(mult) {
@@ -99,19 +126,6 @@ export function createUI(canvas) {
       if (on) { ctx.shadowColor = gold; ctx.shadowBlur = 22; }
       ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
     }
-  }
-  function drawFloaters() {
-    const H = canvas.height;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    for (let i = floaters.length - 1; i >= 0; i--) {
-      const f = floaters[i]; f.y += f.vy; f.life -= 0.02;
-      if (f.life <= 0) { floaters.splice(i, 1); continue; }
-      ctx.globalAlpha = Math.min(1, f.life * 1.5);
-      ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`;
-      ctx.lineWidth = 5; ctx.strokeStyle = '#05070f'; ctx.strokeText(f.text, f.x, f.y);
-      ctx.fillStyle = f.color; ctx.shadowColor = f.color; ctx.shadowBlur = 14; ctx.fillText(f.text, f.x, f.y); ctx.shadowBlur = 0;
-    }
-    ctx.globalAlpha = 1;
   }
   function drawSchool() {
     ctx.fillStyle = '#dfe6ff'; ctx.font = `${Math.round(canvas.height * 0.022)}px system-ui`;
@@ -238,11 +252,11 @@ export function createUI(canvas) {
     }
     // 分數 + Combo（條上方）
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.6)}px system-ui`;
-    ctx.fillText(`${o.label} ${Math.round(o.score)}`, x + w * 0.5, y - h * 0.28);
+    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.55)}px system-ui`;
+    ctx.fillText(`得分：${Math.round(o.score)} 分`, x + w * 0.5, y - h * 0.28);
     if (o.comboMult > 1) {
-      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.52)}px system-ui`;
-      ctx.fillText(`COMBO x${o.comboMult}`, x + w * 0.82, y - h * 0.28);
+      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.5)}px system-ui`;
+      ctx.fillText(`COMBO x${o.comboMult}`, x + w * 0.85, y - h * 0.28);
     }
   }
 
@@ -425,9 +439,9 @@ export function createUI(canvas) {
     drawReady,
     drawReadySingle,
     handInTarget,
+    judge,
     clear,
     onComboBurst: null,
-    onScoreTick: null,
     boxHit(hand, side) {
       return hand ? pointInBox(hand, boxFor(side, canvas.width, canvas.height)) : false;
     },
@@ -446,26 +460,23 @@ export function createUI(canvas) {
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
       drawComboAura(maxMult); // combo 等級 → 全畫面光環升級
       if (state.mode === 'single') {
-        // 圓心大旋轉箭頭（正轉藍/反轉紅），無外圈；單手
-        const R = Math.min(W, H) * 0.26;
-        dirArrow({ x: W * 0.5, y: H * 0.44 }, R, state.segDir, state.segDir === 'R' ? colorB : colorA);
-        pushTrail('S', state.hand); drawTrail('S', colorA); drawHand(state.hand, colorA);
+        const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
+        dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭（縮小）
+        drawMarker('S', cx, cy, R, state.markerAngle, colorA, state.active); // 手鎖圈上（軌道隱藏）
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
-          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult, label: 'YOU', showLR: false });
-        scoreJuice('S', state.score, W * 0.5, H * 0.72, gold);
-        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.42, gold, state.comboMult); flash(colorA); }
+          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult, label: '', showLR: false });
+        if (state.comboMult > prevCombo.S) { triggerBurst(cx, cy, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
         const R = Math.min(W, H) * 0.22;
-        for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
-          dirArrow({ x: cx * W, y: H * 0.44 }, R, state.segDir, color); // 各側玩家色大箭頭
-          pushTrail(side, state[side].hand); drawTrail(side, color);
-          drawHand(state[side].hand, color);
+        for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
+          const cx = cxf * W, cy = H * 0.44;
+          dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
+          drawMarker(side, cx, cy, R, state[side].markerAngle, color, state[side].active);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
             frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
-            label: side, showLR: false });
-          scoreJuice(side, state[side].score, cx * W, H * 0.74, color);
-          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.42, color, state[side].comboMult); flash(color); }
+            label: '', showLR: false });
+          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx, cy, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }
       }
@@ -473,10 +484,10 @@ export function createUI(canvas) {
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.life -= 0.03;
         if (p.life <= 0) { particles.splice(i, 1); continue; }
         ctx.globalAlpha = p.life; ctx.fillStyle = p.color;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r || 5, 0, Math.PI * 2); ctx.fill();
       }
       ctx.globalAlpha = 1;
-      drawFloaters();
+      drawJudges();
       drawBursts();
     },
 

@@ -1,7 +1,7 @@
 import { wristAngle, trackRotation } from './motion.js';
 import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
-import { SCORE_CFG, scoreStep, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, revStep, judgeRev, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars } from './tracks.js';
 import { formatCommand } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
@@ -24,8 +24,7 @@ const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
 ui.onComboBurst = (t) => sfx.comboBurst(t);
-ui.onScoreTick = () => sfx.scoreTick();
-let lastBeat = -1, lastCountSec = -1; // 合拍打點 / 倒數滴答用
+let lastCountSec = -1; // 倒數滴答用
 let victoryResult = null;
 
 // ---- 連接 Arduino（放進「設定」彈窗，於選歌畫面設定；進遊戲後退場）----
@@ -61,9 +60,11 @@ let chart = [];
 let bpm = 120;
 let roundSec = 120;
 let startTime = 0;
-let scoreA = { score: 0, combo: 0 };
-let scoreB = { score: 0, combo: 0 };
-let scoreS = { score: 0, combo: 0 };
+// 每個玩家：score 總分、combo 連續圈數、acc 已累積角度、t0 本圈起始時間、mult 上次倍率
+const newScore = () => ({ score: 0, combo: 0, acc: 0, t0: 0, mult: 1 });
+let scoreA = newScore();
+let scoreB = newScore();
+let scoreS = newScore();
 const rotA = { lastAngle: null };
 const rotB = { lastAngle: null };
 const rotS = { lastAngle: null }; // 單人單手
@@ -98,16 +99,16 @@ function startPlaying() {
   const songLen = Number.isFinite(mvVideo.duration) ? mvVideo.duration : 120;
   roundSec = lenMode === '2' ? Math.min(120, songLen) : songLen;
   chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
-  scoreA = { score: 0, combo: 0 };
-  scoreB = { score: 0, combo: 0 };
+  scoreA = newScore();
+  scoreB = newScore();
   ended = false;
   media.playTrack(selectedIdx);
-  scoreS = { score: 0, combo: 0 };
+  scoreS = newScore();
   rotA.lastAngle = null; rotB.lastAngle = null; rotS.lastAngle = null;
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
   startTime = performance.now();
   last = startTime;
-  lastBeat = -1; lastCountSec = -1; victoryResult = null;
+  lastCountSec = -1; victoryResult = null;
   phase = 'playing';
   mvVideo.addEventListener('loadedmetadata', () => {
     const sl = mvVideo.duration;
@@ -211,44 +212,53 @@ async function loop(pose) {
     const { current, next, remain } = segmentAt(chart, elapsed);
     const segDir = current ? current.dir : 'S';
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
-    let scored = false, hiCombo = false;
+    const sign = segDir === 'R' ? -1 : 1;
+    const energyOf = (om) => Math.min(100, Math.abs(om) / (guideOmega * 1.5) * 100);
+    const activeOf = (om) => segDir !== 'S' && Math.abs(om) > CONFIG.deadzone &&
+      ((segDir === 'F' && om > 0) || (segDir === 'R' && om < 0));
     const endRound = (result, win) => {
       ended = true; phase = 'victory'; victoryResult = result; sendStop(); mvVideo.pause(); sfx.fanfare(win);
       setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 6000);
     };
+    // 處理一位玩家的整圈偵測 → 完成一圈就加分/判定/combo/特效音效。回傳 marker 角度。
+    const stepPlayer = (st, omega, cx, cy, color) => {
+      const r = revStep(st.acc, omega, segDir, dt, SCORE_CFG); st.acc = r.acc;
+      if (r.completed) {
+        const revTime = elapsed - st.t0; st.t0 = elapsed;
+        const j = judgeRev(revTime, bpm, SCORE_CFG);
+        st.combo += 1;
+        const pts = revScore(st.combo, j, SCORE_CFG); st.score += pts;
+        const mult = comboMultiplier(st.combo, SCORE_CFG);
+        const leveled = mult > st.mult; st.mult = mult;
+        ui.judge(j, pts, mult, cx, cy, color);
+        sfx.hit(mult >= 3);
+        if (leveled) { sfx.comboBurst(mult); sfx.voice('Combo'); }
+        else sfx.voice(j === 'EXCELLENT' ? 'Excellent' : j === 'GREAT' ? 'Great' : 'Good');
+      }
+      return -Math.PI / 2 + sign * st.acc; // marker 沿圈位置
+    };
     if (mode === 'single') {
-      const prev = scoreS.score;
-      scoreS = scoreStep(scoreS, segDir, omegaS, dt, bpm, SCORE_CFG);
-      scored = scoreS.score > prev; hiCombo = comboMultiplier(scoreS.combo, SCORE_CFG) >= 3;
-      const fs = fanCommand(omegaS, CONFIG);
-      const energy = Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100);
-      sender.send(formatCommand({ ...fs, energy }, { ...fs, energy })).catch(() => {});
+      const markerAngle = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
+      const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
+      sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
-        barStyle: settings.barStyle,
-        score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), hand: handS });
-      if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, SCORE_CFG) }, true);
+        barStyle: settings.barStyle, score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
+        markerAngle, active: activeOf(omegaS) });
+      if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
     } else {
-      const pa = scoreA.score, pb = scoreB.score;
-      scoreA = scoreStep(scoreA, segDir, omegaA, dt, bpm, SCORE_CFG);
-      scoreB = scoreStep(scoreB, segDir, omegaB, dt, bpm, SCORE_CFG);
-      scored = scoreA.score > pa || scoreB.score > pb;
-      hiCombo = Math.max(comboMultiplier(scoreA.combo, SCORE_CFG), comboMultiplier(scoreB.combo, SCORE_CFG)) >= 3;
+      const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
+      const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
       const fa = fanCommand(omegaA, CONFIG), fb = fanCommand(omegaB, CONFIG);
-      sender.send(formatCommand(
-        { ...fa, energy: Math.min(100, scoreA.score / SCORE_CFG.scoreForFullBar * 100) },
-        { ...fb, energy: Math.min(100, scoreB.score / SCORE_CFG.scoreForFullBar * 100) })).catch(() => {});
+      sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle,
-        A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA },
-        B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB } });
+        A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA, active: activeOf(omegaA) },
+        B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB, active: activeOf(omegaB) } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);
       }
     }
-    // 合拍打點：每拍最多一次，且當幀有得分才響
-    const beat = Math.floor(elapsed * bpm / 60);
-    if (beat !== lastBeat) { lastBeat = beat; if (scored) sfx.hit(hiCombo); }
     // 倒數滴答（最後 10 秒每秒一聲，最後 3 秒更急）
     const sec = Math.ceil(timeLeft);
     if (timeLeft <= 10 && sec !== lastCountSec) { lastCountSec = sec; if (sec > 0) sfx.countTick(sec <= 3); }

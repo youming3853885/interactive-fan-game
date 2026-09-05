@@ -35,4 +35,15 @@ export const sfx = {
     const seq = win ? [523, 659, 784, 1047, 1319] : [523, 494, 440];
     seq.forEach((f, k) => setTimeout(() => blip(f, 0.2, 'triangle', 0.16), k * 120));
   },
+  // 勁舞團式語音判定：用瀏覽器內建 TTS 說 Good/Great/Excellent/Combo（免素材）。
+  voice(text) {
+    try {
+      const s = window.speechSynthesis; if (!s) return;
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = 1.15; u.pitch = 1.1; u.volume = 1;
+      const en = s.getVoices().find((v) => /en(-|_|$)/i.test(v.lang));
+      if (en) u.voice = en;
+      s.cancel(); s.speak(u);
+    } catch { /* 忽略 */ }
+  },
 };

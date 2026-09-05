@@ -2,15 +2,13 @@ import { direction } from './motion.js';
 
 export const SCORE_CFG = {
   deadzone: 1.5,
-  baseRate: 100,
-  tempoBonus: 1.6,
-  tempoLo: 0.6,
-  tempoHi: 1.6,
-  comboStep: 2,
+  baseRevScore: 120,   // 每轉完一圈的基礎分
+  comboStep: 2,        // 每 N 圈 combo 倍率 +1
   comboMax: 5,
-  revsPerBeat: 0.5,
-  scoreForFullBar: 3000,
-  gradeS: 1.5, gradeA: 1.0, gradeB: 0.5,
+  revsPerBeat: 0.5,    // 目標：每 2 拍一圈
+  // 判定視窗（實際整圈耗時 / 理想耗時 的比例）
+  exLo: 0.75, exHi: 1.35,   // EXCELLENT
+  grLo: 0.55, grHi: 1.8,    // GREAT（其餘 GOOD）
 };
 
 export function targetOmegaFor(bpm, cfg) {
@@ -22,20 +20,30 @@ export function comboMultiplier(combo, cfg) {
   return Math.min(cfg.comboMax, 1 + Math.floor(combo / cfg.comboStep));
 }
 
-// state = { score, combo(秒) }；segDir ∈ 'F'|'R'|'S'。回傳新 state。
-export function scoreStep(state, segDir, omega, dt, bpm, cfg) {
-  let { score, combo } = state;
-  if (segDir === 'S' || segDir == null) return { score, combo };
+// 累積角度偵測「整圈」。acc=已累積角度(弧度)；方向對才累積。
+// 回傳 { acc, completed }（completed=1 表示這步剛好轉完一圈）。
+export function revStep(acc, omega, segDir, dt, cfg) {
+  if (segDir === 'S' || segDir == null) return { acc, completed: 0 };
   const dir = direction(omega, cfg.deadzone);
-  const correct = dir !== 'S' && dir === segDir;
-  if (!correct) return { score, combo }; // 做錯只暫停累積，不歸零 combo
-  const target = targetOmegaFor(bpm, cfg);
-  const mag = Math.abs(omega);
-  const onTempo = mag >= cfg.tempoLo * target && mag <= cfg.tempoHi * target;
-  const tempoMult = onTempo ? cfg.tempoBonus : 1;
-  combo += dt;
-  score += cfg.baseRate * dt * tempoMult * comboMultiplier(combo, cfg);
-  return { score, combo };
+  if (dir === 'S' || dir !== segDir) return { acc, completed: 0 }; // 方向錯/停手 → 暫停(保留 acc)
+  const na = acc + Math.abs(omega) * dt;
+  if (na >= 2 * Math.PI) return { acc: na - 2 * Math.PI, completed: 1 };
+  return { acc: na, completed: 0 };
+}
+
+// 依整圈耗時 vs 理想耗時給判定：EXCELLENT / GREAT / GOOD
+export function judgeRev(revTime, bpm, cfg) {
+  const ideal = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
+  const r = revTime / ideal;
+  if (r >= cfg.exLo && r <= cfg.exHi) return 'EXCELLENT';
+  if (r >= cfg.grLo && r <= cfg.grHi) return 'GREAT';
+  return 'GOOD';
+}
+
+// 一圈得分 = 基礎 × 判定倍率 × combo 倍率
+export function revScore(combo, judgment, cfg) {
+  const jm = judgment === 'EXCELLENT' ? 1.5 : judgment === 'GREAT' ? 1.2 : 1.0;
+  return Math.round(cfg.baseRevScore * jm * comboMultiplier(combo, cfg));
 }
 
 export function higherScore(a, b) {
@@ -44,10 +52,14 @@ export function higherScore(a, b) {
   return null;
 }
 
-export function gradeFor(score, roundSec, cfg) {
-  const ratio = score / (cfg.baseRate * roundSec);
-  if (ratio >= cfg.gradeS) return 'S';
-  if (ratio >= cfg.gradeA) return 'A';
-  if (ratio >= cfg.gradeB) return 'B';
+// 評級：依實際分數 / 該局理想分數 的比例
+export function gradeFor(score, roundSec, bpm, cfg) {
+  const idealRevTime = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
+  const expectedRevs = roundSec / idealRevTime;
+  const expected = cfg.baseRevScore * Math.max(1, expectedRevs); // 基準（combo 1x、全 GOOD）
+  const ratio = score / expected;
+  if (ratio >= 2.2) return 'S';
+  if (ratio >= 1.4) return 'A';
+  if (ratio >= 0.7) return 'B';
   return 'C';
 }

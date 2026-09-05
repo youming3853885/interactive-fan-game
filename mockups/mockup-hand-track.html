@@ -1,0 +1,53 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>手鎖圈軌道 mockup</title>
+<style>body{margin:0;background:#0a0b12;color:#e7ecff;font-family:system-ui,sans-serif}
+.wrap{max-width:940px;margin:0 auto;padding:20px}h1{text-align:center;font-size:20px}
+.sub{text-align:center;color:#8b93bd;font-size:13px;margin-top:-6px}.t{font-weight:800;margin:16px 0 6px}
+canvas{width:100%;aspect-ratio:16/9;display:block;border-radius:12px;border:1px solid #ffffff1a;background:#000}
+ul{color:#c3cbef;font-size:14px;line-height:1.7}</style></head><body>
+<div class="wrap"><h1>手鎖在圈軌道 + 得分純文字</h1>
+<div class="sub">遊戲的手不跟真實 xy（不再亂飄）；偵測到在畫圈就沿圈勻速滑；中心箭頭示方向</div>
+<div class="t">單人（藍・正轉）</div><canvas id="c1"></canvas>
+<div class="t">雙人（A 藍 / B 紅）</div><canvas id="c2"></canvas>
+<ul>
+<li>手 🖐 <b>鎖在圈上</b>，方向對就沿圈<b>勻速跑</b>＋彗尾，完全無抖動</li>
+<li>分數改 <b>「得分：800 分」</b>（雙人兩邊同格式，靠藍/紅框分左右）</li>
+<li>中心大箭頭仍示方向（正轉順/反轉逆），圈＝要畫的軌道</li>
+</ul></div>
+<script>
+const colorA='#2b7bff',colorB='#ff3b3b',gold='#ffd76b';
+const bar=new Image();bar.src='assets/bar-1.png';
+function rr(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function bg(ctx,W,H){const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#241a12');g.addColorStop(.5,'#14100c');g.addColorStop(1,'#1a2230');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='#ffffff10';ctx.font=`900 ${H*0.2}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MV',W/2,H*0.5);ctx.fillStyle='rgba(4,5,12,0.62)';ctx.fillRect(0,0,W,H);}
+function dirArrow(ctx,cx,cy,r,dir,color,phase){const s=dir==='R'?-1:1,a0=-Math.PI/2+phase*s,a1=a0+Math.PI*1.55*s;
+  ctx.save();ctx.lineCap='round';ctx.strokeStyle='#000000aa';ctx.lineWidth=r*0.22;ctx.beginPath();ctx.arc(cx,cy,r,a0,a1,s<0);ctx.stroke();
+  ctx.strokeStyle=color;ctx.lineWidth=r*0.16;ctx.shadowColor=color;ctx.shadowBlur=r*0.35;ctx.beginPath();ctx.arc(cx,cy,r,a0,a1,s<0);ctx.stroke();
+  const head=r*0.42,tx=cx+r*Math.cos(a1),ty=cy+r*Math.sin(a1),tg=a1+s*Math.PI/2;
+  ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tg-s*0.5),ty-head*Math.sin(tg-s*0.5));ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tg+s*0.5),ty-head*Math.sin(tg+s*0.5));ctx.stroke();ctx.restore();}
+// 圈軌道 + 手 marker（沿圈）+ 彗尾
+function track(ctx,cx,cy,R,color,ang,H){
+  ctx.save();
+  // 軌道：深底 + 虛線
+  ctx.strokeStyle='#00000088';ctx.lineWidth=10;ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();
+  ctx.strokeStyle=color+'66';ctx.lineWidth=4;ctx.setLineDash([10,12]);ctx.beginPath();ctx.arc(cx,cy,R,0,7);ctx.stroke();ctx.setLineDash([]);
+  // 彗尾
+  ctx.shadowColor=color;ctx.shadowBlur=20;ctx.strokeStyle=color;ctx.lineWidth=8;ctx.beginPath();ctx.arc(cx,cy,R,ang-0.8,ang);ctx.stroke();
+  ctx.restore();
+  // 手 marker
+  const mx=cx+R*Math.cos(ang),my=cy+R*Math.sin(ang);
+  ctx.save();ctx.beginPath();ctx.arc(mx,my,H*0.055,0,7);ctx.fillStyle='#00000066';ctx.fill();ctx.shadowColor=color;ctx.shadowBlur=22;ctx.strokeStyle=color;ctx.lineWidth=5;ctx.stroke();ctx.restore();
+  ctx.font=`${Math.round(H*0.075)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🖐',mx,my);}
+function gauge(ctx,x,y,w,h,frac){if(bar.complete&&bar.naturalWidth)ctx.drawImage(bar,x,y,w,h);const chXL=x+w*0.10,chXR=x+w*0.90,chY=y+h*0.331,chH=h*0.289,fx=chXL+frac*(chXR-chXL);ctx.save();ctx.globalAlpha=0.8;ctx.fillStyle='#02030a';ctx.fillRect(fx,chY,chXR-fx,chH);ctx.restore();}
+function clock(ctx,cx,H){const y=H*0.11-H*0.05;ctx.save();ctx.fillStyle='#05070fe6';ctx.strokeStyle='#3fe0ff';ctx.lineWidth=3;ctx.shadowColor='#3fe0ff';ctx.shadowBlur=14;rr(ctx,cx-H*0.11,y,H*0.22,H*0.1,H*0.02);ctx.fill();ctx.stroke();ctx.restore();ctx.fillStyle='#3fe0ff';ctx.font=`900 ${Math.round(H*0.06)}px monospace`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('01:29',cx,y+H*0.05);}
+function hud(ctx,W,H){ctx.fillStyle='#dfe6ff';ctx.font=`${Math.round(H*0.03)}px system-ui`;ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('澎湖縣龍門國小 · 畫圈對決',10,10);clock(ctx,W/2,H);}
+function scoreText(ctx,cx,y,H,score,combo,color){ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle=color;ctx.font=`900 ${Math.round(H*0.055)}px system-ui`;ctx.fillText(`得分：${score} 分`,cx,y);if(combo>1){ctx.fillStyle=gold;ctx.font=`900 ${Math.round(H*0.05)}px system-ui`;ctx.fillText(`COMBO x${combo}`,cx+H*0.28,y);}}
+let t=0;
+function tick(){t+=0.03;
+ {const c=document.getElementById('c1');c.width=c.clientWidth;c.height=c.clientWidth*9/16;const ctx=c.getContext('2d'),W=c.width,H=c.height;bg(ctx,W,H);hud(ctx,W,H);
+  const R=Math.min(W,H)*0.28,cx=W/2,cy=H*0.44;track(ctx,cx,cy,R,colorA,t,H);dirArrow(ctx,cx,cy,R*0.52,'F',colorA,t);
+  scoreText(ctx,cx,H*0.74,H,800,4,colorA);gauge(ctx,W*0.09,H*0.80,W*0.82,H*0.12,0.6);}
+ {const c=document.getElementById('c2');c.width=c.clientWidth;c.height=c.clientWidth*9/16;const ctx=c.getContext('2d'),W=c.width,H=c.height;bg(ctx,W,H);ctx.fillStyle='#2b7bff14';ctx.fillRect(0,0,W/2,H);ctx.fillStyle='#ff3b3b14';ctx.fillRect(W/2,0,W/2,H);hud(ctx,W,H);
+  const R=Math.min(W,H)*0.2;
+  for(const [cxf,col,gx,ang] of [[0.25,colorA,0.04,t],[0.75,colorB,0.52,-t*0.8]]){track(ctx,cxf*W,H*0.42,R,col,ang,H);dirArrow(ctx,cxf*W,H*0.42,R*0.5,cxf<0.5?'F':'R',col,ang);scoreText(ctx,cxf*W,H*0.72,H,cxf<0.5?800:640,cxf<0.5?4:2,col);gauge(ctx,gx*W,H*0.84,W*0.44,H*0.11,cxf<0.5?0.6:0.45);}}
+ requestAnimationFrame(tick);}tick();
+</script></body></html>
