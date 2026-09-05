@@ -98,16 +98,30 @@ export function createUI(canvas) {
     ctx.font = `${Math.round(H * 0.07)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
     ctx.fillText('🖐', mx, my);
   }
-  // combo 等級 → 全畫面邊框光暈升級（越高越亮越華麗）
-  function drawComboAura(mult) {
-    if (mult < 2) return;
-    const W = canvas.width, H = canvas.height, t = Math.min(1, (mult - 1) / 4);
-    const col = mult >= 5 ? '#ff3bd0' : mult >= 4 ? '#ff6b3b' : mult >= 3 ? '#ffd76b' : '#4ec3ff';
-    const pulse = 0.65 + 0.35 * Math.sin(guidePhase * 4);
-    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 45 * t * pulse; ctx.strokeStyle = col;
-    ctx.globalAlpha = 0.55 * t; ctx.lineWidth = Math.max(6, H * 0.03 * t);
-    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
-    ctx.restore(); ctx.globalAlpha = 1;
+  // 上下點陣音波外框（與選歌畫面同款）：接 MV 頻譜律動；combo 越高越亮越換色。
+  function drawFrameEq(spectrum, maxMult) {
+    const W = canvas.width, H = canvas.height;
+    const NB = 56, ROWS = 6, dot = Math.max(3, H * 0.007), gap = dot * 1.4;
+    const col = maxMult >= 5 ? '#ff6bd0' : maxMult >= 3 ? '#ffd76b' : '#5fe0ff';
+    const glow = 6 + Math.min(1, (maxMult - 1) / 4) * 14; // combo 越高越亮
+    const usable = spectrum ? Math.floor(spectrum.length * 0.7) : 0;
+    const yTop = H * 0.012, yBot = H - H * 0.012 - dot;
+    ctx.save();
+    for (let k = 0; k < NB; k++) {
+      const x = W * 0.02 + (W * 0.96) * (k / (NB - 1));
+      const v = spectrum ? spectrum[Math.floor((k / (NB - 1)) * usable)] / 255 : 0.25;
+      const lit = Math.max(1, Math.round(Math.pow(v, 0.7) * ROWS));
+      for (let r = 0; r < ROWS; r++) {
+        const on = r < lit;
+        for (const yA of [yTop + r * (dot + gap), yBot - r * (dot + gap)]) {
+          ctx.beginPath(); ctx.arc(x, yA + dot / 2, dot / 2, 0, Math.PI * 2);
+          if (on) { ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = glow; }
+          else { ctx.fillStyle = '#173a63'; ctx.shadowBlur = 0; }
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore(); ctx.shadowBlur = 0;
   }
   function spawnFirework(x, y, color) {
     for (let i = 0; i < 22; i++) {
@@ -533,7 +547,7 @@ export function createUI(canvas) {
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / (state.maxScore || 3000)));
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
-      drawComboAura(maxMult); // combo 等級 → 全畫面光環升級
+      drawFrameEq(state.spectrum, maxMult); // 上下點陣音波外框（隨音樂+combo）
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭

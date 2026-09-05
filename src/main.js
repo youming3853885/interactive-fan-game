@@ -16,6 +16,7 @@ import { createLoadingScreen } from './loading.js';
 import { createModeModal } from './mode-modal.js';
 import { preloadTracks } from './preload.js';
 import { sfx } from './sfx.js';
+import { attachAnalyser } from './audio.js';
 
 const video = document.getElementById('cam');
 const mvVideo = document.getElementById('mv');
@@ -60,6 +61,7 @@ let chart = [];
 let bpm = 120;
 let roundSec = 120;
 let maxScore = 1;
+let mvAnalyser = null, mvFreq = null; // MV 音樂即時頻譜（外框音波用）
 let startTime = 0;
 // 每個玩家狀態：score 分數、combo 圈數、mult 上次倍率、mAng marker 角度、mAcc marker 累積(判斷整圈)、
 // oEMA 平滑角速度(判斷是否在轉)、active 是否在正確方向畫圈、oSum/oN 本圈平均轉速累計。
@@ -114,6 +116,7 @@ function startPlaying() {
   scoreB = newScore();
   ended = false;
   media.playTrack(selectedIdx);
+  if (!mvAnalyser) { try { mvAnalyser = attachAnalyser(mvVideo); mvFreq = new Uint8Array(mvAnalyser.frequencyBinCount); } catch { mvAnalyser = null; } }
   scoreS = newScore();
   rotA.lastAngle = null; rotB.lastAngle = null; rotS.lastAngle = null;
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
@@ -238,6 +241,7 @@ async function loop(pose) {
     const { current, next, remain } = segmentAt(chart, elapsed);
     const segDir = current ? current.dir : 'S';
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
+    if (mvAnalyser) mvAnalyser.getByteFrequencyData(mvFreq); // 取 MV 即時頻譜
     const dirSign = segDir === 'R' ? -1 : 1;
     const energyOf = (om) => Math.min(100, Math.abs(om) / (guideOmega * 1.5) * 100);
     const endRound = (result, win) => {
@@ -283,7 +287,7 @@ async function loop(pose) {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
       const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
       sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
-      ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
+      ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         hand: handS, active: m.active });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
@@ -292,7 +296,7 @@ async function loop(pose) {
       const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
       const fa = fanCommand(omegaA, CONFIG), fb = fanCommand(omegaB, CONFIG);
       sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
-      ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
+      ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle,
         A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active },
         B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active } });
