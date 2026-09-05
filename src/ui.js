@@ -50,6 +50,62 @@ export function createUI(canvas) {
     ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
+
+  // 7 段數位顯示
+  const SEG7 = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcfgd' };
+  function drawDigit(x, y, w, h, ch, onC) {
+    const t = w * 0.18, off = '#ffffff10', S = SEG7[ch] || '';
+    const put = (k, rx, ry, rw, rh) => {
+      if (S.includes(k)) { ctx.fillStyle = onC; ctx.shadowColor = onC; ctx.shadowBlur = w * 0.28; }
+      else { ctx.fillStyle = off; ctx.shadowBlur = 0; }
+      ctx.fillRect(rx, ry, rw, rh); ctx.shadowBlur = 0;
+    };
+    put('a', x + t, y, w - 2 * t, t); put('g', x + t, y + h / 2 - t / 2, w - 2 * t, t); put('d', x + t, y + h - t, w - 2 * t, t);
+    put('f', x, y + t, t, h / 2 - 1.5 * t); put('b', x + w - t, y + t, t, h / 2 - 1.5 * t);
+    put('e', x, y + h / 2 + t / 2, t, h / 2 - 1.5 * t); put('c', x + w - t, y + h / 2 + t / 2, t, h / 2 - 1.5 * t);
+  }
+  // 遊戲式電子鐘 MM:SS；剩時 ≤10 秒轉紅並脈動。
+  function drawClock(cx, cy, secs) {
+    const H = canvas.height, low = secs <= 10, onC = low ? '#ff3b3b' : '#3fe0ff';
+    const mm = Math.floor(secs / 60), ss = secs % 60;
+    const digs = [Math.floor(mm / 10) % 10, mm % 10, Math.floor(ss / 10), ss % 10];
+    const dh = H * 0.11, dw = dh * 0.6, gap = dw * 0.22, colonW = dw * 0.5;
+    const total = dw * 4 + gap * 3 + colonW; const y = cy - dh / 2;
+    const scale = low ? (1 + 0.05 * Math.sin(guidePhase * 6)) : 1;
+    ctx.save(); ctx.translate(cx, cy); ctx.scale(scale, scale); ctx.translate(-cx, -cy);
+    let x = cx - total / 2;
+    const padx = dh * 0.30, pady = dh * 0.24;
+    ctx.fillStyle = '#05070fe6'; ctx.strokeStyle = onC; ctx.lineWidth = 3; ctx.shadowColor = onC; ctx.shadowBlur = low ? 26 : 16;
+    roundRectPath(x - padx, y - pady, total + padx * 2, dh + pady * 2, dh * 0.22); ctx.fill(); ctx.stroke(); ctx.shadowBlur = 0;
+    ctx.fillStyle = onC; ctx.font = `900 ${Math.round(dh * 0.22)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    ctx.fillText('T I M E', cx, y - pady * 0.15);
+    drawDigit(x, y, dw, dh, digs[0], onC); x += dw + gap; drawDigit(x, y, dw, dh, digs[1], onC); x += dw + gap;
+    ctx.fillStyle = onC; ctx.shadowColor = onC; ctx.shadowBlur = dh * 0.2;
+    ctx.beginPath(); ctx.arc(x + colonW / 2, y + dh * 0.33, dw * 0.09, 0, Math.PI * 2); ctx.arc(x + colonW / 2, y + dh * 0.67, dw * 0.09, 0, Math.PI * 2); ctx.fill(); ctx.shadowBlur = 0; x += colonW + gap;
+    drawDigit(x, y, dw, dh, digs[2], onC); x += dw + gap; drawDigit(x, y, dw, dh, digs[3], onC);
+    ctx.restore();
+  }
+  // 右上「下一個」小旋轉箭頭 + 秒數（不與其他元件重疊）
+  function drawNextHint(dir, n) {
+    if (!dir) return;
+    const W = canvas.width, H = canvas.height, x = W - H * 0.13, y = H * 0.11;
+    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#aeb8e0'; ctx.font = `${Math.round(H * 0.026)}px system-ui`; ctx.fillText('下一個', x, y - H * 0.06);
+    if (dir === 'S') {
+      ctx.fillStyle = '#aeb8e0'; ctx.font = `900 ${Math.round(H * 0.04)}px system-ui`; ctx.fillText('休息', x, y + H * 0.01);
+    } else {
+      const sign = dir === 'R' ? -1 : 1, r = H * 0.032, col = dir === 'R' ? colorB : colorA;
+      const a0 = -Math.PI / 2, a1 = a0 + Math.PI * 1.4 * sign;
+      ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.shadowColor = col; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(x, y, r, a0, a1, sign < 0); ctx.stroke();
+      const tx = x + r * Math.cos(a1), ty = y + r * Math.sin(a1), tang = a1 + sign * Math.PI / 2, head = r * 0.7;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang - sign * 0.6), ty - head * Math.sin(tang - sign * 0.6));
+      ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang + sign * 0.6), ty - head * Math.sin(tang + sign * 0.6)); ctx.stroke();
+      ctx.shadowBlur = 0;
+    }
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`; ctx.fillText(String(Math.ceil(n)), x, y + H * 0.08);
+    ctx.restore();
+  }
   // 能量條：codex 底圖(3款可選) + 未填滿處暗罩露出底圖=進度。
   // o = { x, y, w, h, frac, score, comboMult, label, color, style, showLR, lActive, rActive }
   function drawGauge(o) {
@@ -144,29 +200,31 @@ export function createUI(canvas) {
     ctx.fillText('🖐', pt.x, pt.y);
   }
 
-  // 最上層：畫圓運動導引。虛線沿方向流動 + 彗尾 + 亮點，明確指出要畫的方向與速度。
-  function drawGuide(center, radius, dir, color) {
+  // 圓心大旋轉箭頭（取代黃色導引圈）：F 順時針、R 逆時針，沿方向轉。S=暫停圖。
+  function dirArrow(center, radius, dir, color) {
+    const { x: cx, y: cy } = center;
+    if (dir === 'S' || dir == null) { // 休息：暫停雙槓
+      ctx.save(); ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 24;
+      const bw = radius * 0.24, bh = radius * 0.9, g = radius * 0.22;
+      roundRectPath(cx - g - bw, cy - bh / 2, bw, bh, bw * 0.3); ctx.fill();
+      roundRectPath(cx + g, cy - bh / 2, bw, bh, bw * 0.3); ctx.fill();
+      ctx.restore(); return;
+    }
     const sign = dir === 'R' ? -1 : 1; // F 順時針、R 逆時針
-    const ang = guidePhase * sign;
-    ctx.save();
-    // 1) 深色襯底環（不論 MV 多花都看得到）
-    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = 16;
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
-    // 2) 彩色虛線圈，dash 沿方向流動 → 整圈像在轉
-    ctx.shadowColor = color; ctx.shadowBlur = 18;
-    ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.setLineDash([18, 16]);
-    ctx.lineDashOffset = -sign * guidePhase * radius;
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]); ctx.lineDashOffset = 0;
-    // 3) 彗尾亮弧（在亮點後方拖尾，強化方向感）
-    ctx.lineWidth = 10; ctx.shadowBlur = 26;
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, ang - sign * 0.9, ang, sign < 0); ctx.stroke();
-    // 4) 方向亮點（大顆 + 深色描邊 + 發光）
-    const mx = center.x + radius * Math.cos(ang), my = center.y + radius * Math.sin(ang);
-    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.034, 0, Math.PI * 2);
-    ctx.fillStyle = color; ctx.fill();
-    ctx.shadowBlur = 0; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
-    ctx.restore();
+    const a0 = -Math.PI / 2 + guidePhase * sign, a1 = a0 + Math.PI * 1.55 * sign;
+    ctx.save(); ctx.lineCap = 'round';
+    // 深色襯底弧
+    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = radius * 0.22;
+    ctx.beginPath(); ctx.arc(cx, cy, radius, a0, a1, sign < 0); ctx.stroke();
+    // 彩色弧 + 發光
+    ctx.strokeStyle = color; ctx.lineWidth = radius * 0.16; ctx.shadowColor = color; ctx.shadowBlur = radius * 0.35;
+    ctx.beginPath(); ctx.arc(cx, cy, radius, a0, a1, sign < 0); ctx.stroke();
+    // 箭頭
+    const head = radius * 0.42, tx = cx + radius * Math.cos(a1), ty = cy + radius * Math.sin(a1), tang = a1 + sign * Math.PI / 2;
+    ctx.beginPath();
+    ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang - sign * 0.5), ty - head * Math.sin(tang - sign * 0.5));
+    ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang + sign * 0.5), ty - head * Math.sin(tang + sign * 0.5));
+    ctx.stroke(); ctx.restore();
   }
 
   function spawnParticles(x, y, color) {
@@ -315,35 +373,30 @@ export function createUI(canvas) {
       ctx.fillStyle = 'rgba(4,5,12,0.62)'; ctx.fillRect(0, 0, W, H);
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
       drawSchool();
-      const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '休息';
-      centerText(glyph, 0.12, 0.08, '#fff');
-      if (state.nextDir) {
-        const nn = state.nextDir === 'F' ? '正轉' : state.nextDir === 'R' ? '反轉' : '休息';
-        centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
-      }
-      centerText(`剩餘 ${Math.ceil(state.timeLeft)} 秒`, 0.05, 0.03, '#fff');
+      drawClock(W / 2, H * 0.11, Math.max(0, Math.ceil(state.timeLeft))); // 遊戲式電子鐘
+      drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
       if (state.mode === 'single') {
-        // 單一大導引圓（雙手共用）
+        // 圓心大旋轉箭頭（正轉藍/反轉紅），無外圈
         const R = Math.min(W, H) * 0.26;
-        if (state.segDir !== 'S') drawGuide({ x: W * 0.5, y: H * 0.42 }, R, state.segDir, gold);
+        dirArrow({ x: W * 0.5, y: H * 0.48 }, R, state.segDir, state.segDir === 'R' ? colorB : colorA);
         drawHand(state.handL, colorA); drawHand(state.handR, colorB);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
           frac: gFrac(state.score), score: state.score, comboMult: state.comboMult,
           label: 'YOU', showLR: true, lActive: state.lActive, rActive: state.rActive });
-        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.42, gold, state.comboMult); flash(colorA); }
+        if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.48, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
-        const R = Math.min(W, H) * 0.2;
+        const R = Math.min(W, H) * 0.22;
         for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
-          if (state.segDir !== 'S') drawGuide({ x: cx * W, y: H * 0.42 }, R, state.segDir, color);
+          dirArrow({ x: cx * W, y: H * 0.48 }, R, state.segDir, color); // 各側玩家色大箭頭
           drawHand(state[side].hand, color);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
             frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
             label: side, showLR: false });
-          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.42, color, state[side].comboMult); flash(color); }
+          if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.48, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }
       }

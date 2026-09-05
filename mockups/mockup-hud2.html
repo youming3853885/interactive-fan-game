@@ -1,0 +1,72 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>HUD 優化 mockup v2</title>
+<style>body{margin:0;background:#0a0b12;color:#e7ecff;font-family:system-ui,sans-serif}
+.wrap{max-width:940px;margin:0 auto;padding:20px}h1{text-align:center;font-size:20px}
+.sub{text-align:center;color:#8b93bd;font-size:13px;margin-top:-6px}
+.t{font-weight:800;margin:16px 0 6px}
+canvas{width:100%;aspect-ratio:16/9;display:block;border-radius:12px;border:1px solid #ffffff1a;background:#000}
+ul{color:#c3cbef;font-size:14px;line-height:1.7}</style></head><body>
+<div class="wrap"><h1>HUD v2：只留紅/藍大旋轉箭頭 · 遊戲式電子鐘 · 下一個移右上</h1>
+<div class="sub">無黃色外圈；箭頭放大到原圈大小；下一個提示不與任何元件重疊；電子鐘剩時少會變紅脈動</div>
+<div class="t">正轉（藍・順時針）· 時間充足(青色)</div><canvas id="cF"></canvas>
+<div class="t">反轉（紅・逆時針）· 剩時 8 秒(紅色脈動)</div><canvas id="cR"></canvas>
+<ul>
+<li><b>移除黃色虛線外圈</b>，只保留紅/藍<b>大旋轉箭頭</b>（放大到原圈大小），箭頭本身沿方向轉＝要畫的方向</li>
+<li><b>下一個</b>提示移到<b>右上角</b>，不與時鐘/圈/能量條/手重疊</li>
+<li>電子鐘 <b>7段MM:SS</b> + 遊戲式外框；剩時 ≤10 秒轉<b>紅色並脈動</b>提示急迫</li>
+</ul></div>
+<script>
+const colorA='#2b7bff',colorR='#ff3b3b';
+const SEG={0:'abcdef',1:'bc',2:'abged',3:'abgcd',4:'fgbc',5:'afgcd',6:'afgedc',7:'abc',8:'abcdefg',9:'abcfgd'};
+function rr(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function seg(ctx,x,y,w,h,ch,onC){const t=w*0.18,off='#ffffff10';
+  const S=SEG[ch]||'';const put=(k,rx,ry,rw,rh)=>{if(S.includes(k)){ctx.fillStyle=onC;ctx.shadowColor=onC;ctx.shadowBlur=w*0.28;}else{ctx.fillStyle=off;ctx.shadowBlur=0;}ctx.fillRect(rx,ry,rw,rh);ctx.shadowBlur=0;};
+  put('a',x+t,y,w-2*t,t);put('g',x+t,y+h/2-t/2,w-2*t,t);put('d',x+t,y+h-t,w-2*t,t);
+  put('f',x,y+t,t,h/2-1.5*t);put('b',x+w-t,y+t,t,h/2-1.5*t);
+  put('e',x,y+h/2+t/2,t,h/2-1.5*t);put('c',x+w-t,y+h/2+t/2,t,h/2-1.5*t);}
+function clock(ctx,cx,cy,H,secs,pulse){const low=secs<=10;const onC=low?'#ff3b3b':'#3fe0ff';
+  const mm=Math.floor(secs/60),ss=secs%60;const digs=[Math.floor(mm/10),mm%10,Math.floor(ss/10),ss%10];
+  const dh=H*0.12,dw=dh*0.6,gap=dw*0.22,colonW=dw*0.5;const total=dw*4+gap*3+colonW;let x=cx-total/2;const y=cy-dh/2;
+  const padx=dh*0.30,pady=dh*0.24;const scale=low?(1+0.05*Math.sin(pulse*6)):1;
+  ctx.save();ctx.translate(cx,cy);ctx.scale(scale,scale);ctx.translate(-cx,-cy);
+  ctx.fillStyle='#05070fe6';ctx.strokeStyle=onC;ctx.lineWidth=3;ctx.shadowColor=onC;ctx.shadowBlur=low?26:16;
+  rr(ctx,x-padx,y-pady,total+padx*2,dh+pady*2,dh*0.22);ctx.fill();ctx.stroke();ctx.shadowBlur=0;
+  // TIME label
+  ctx.fillStyle=onC;ctx.font=`900 ${Math.round(dh*0.22)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillText('T I M E',cx,y-pady*0.15);
+  seg(ctx,x,y,dw,dh,digs[0],onC);x+=dw+gap;seg(ctx,x,y,dw,dh,digs[1],onC);x+=dw+gap;
+  ctx.fillStyle=onC;ctx.shadowColor=onC;ctx.shadowBlur=dh*0.2;ctx.beginPath();ctx.arc(x+colonW/2,y+dh*0.33,dw*0.09,0,7);ctx.arc(x+colonW/2,y+dh*0.67,dw*0.09,0,7);ctx.fill();ctx.shadowBlur=0;x+=colonW+gap;
+  seg(ctx,x,y,dw,dh,digs[2],onC);x+=dw+gap;seg(ctx,x,y,dw,dh,digs[3],onC);
+  ctx.restore();}
+// 大旋轉箭頭（取代圈）：dir F 順時針/R 逆時針，半徑=r
+function dirArrow(ctx,cx,cy,r,dir,color,phase){const sign=dir==='R'?-1:1;
+  ctx.save();
+  // 深色襯底弧
+  ctx.strokeStyle='#000000aa';ctx.lineWidth=r*0.22;ctx.lineCap='round';
+  const a0=-Math.PI/2+phase*sign,sweep=Math.PI*1.55,a1=a0+sweep*sign;
+  ctx.beginPath();ctx.arc(cx,cy,r,a0,a1,sign<0);ctx.stroke();
+  // 彩色弧 + 發光
+  ctx.strokeStyle=color;ctx.lineWidth=r*0.16;ctx.shadowColor=color;ctx.shadowBlur=r*0.35;
+  ctx.beginPath();ctx.arc(cx,cy,r,a0,a1,sign<0);ctx.stroke();
+  // 箭頭
+  const head=r*0.42,tx=cx+r*Math.cos(a1),ty=cy+r*Math.sin(a1),tang=a1+sign*Math.PI/2;
+  ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tang-sign*0.5),ty-head*Math.sin(tang-sign*0.5));
+  ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tang+sign*0.5),ty-head*Math.sin(tang+sign*0.5));ctx.stroke();
+  ctx.restore();}
+function bg(ctx,W,H){const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#241a12');g.addColorStop(.5,'#14100c');g.addColorStop(1,'#1a2230');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='#ffffff10';ctx.font=`900 ${H*0.2}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('MV',W/2,H*0.5);ctx.fillStyle='rgba(4,5,12,0.62)';ctx.fillRect(0,0,W,H);}
+function school(ctx,H){ctx.fillStyle='#dfe6ff';ctx.font=`${Math.round(H*0.03)}px system-ui`;ctx.textAlign='left';ctx.textBaseline='top';ctx.fillText('澎湖縣龍門國小 · 畫圈對決',10,10);}
+// 下一個：右上角，不重疊
+function nextHint(ctx,W,H,dir,n){const x=W-H*0.13,y=H*0.10;ctx.save();ctx.textAlign='center';ctx.textBaseline='middle';
+  ctx.fillStyle='#aeb8e0';ctx.font=`${Math.round(H*0.026)}px system-ui`;ctx.fillText('下一個',x,y-H*0.055);
+  const sign=dir==='R'?-1:1,r=H*0.032,cy=y+H*0.005;ctx.strokeStyle=dir==='R'?colorR:colorA;ctx.lineWidth=4;ctx.lineCap='round';ctx.shadowColor=ctx.strokeStyle;ctx.shadowBlur=12;
+  const a0=-Math.PI/2,a1=a0+Math.PI*1.4*sign;ctx.beginPath();ctx.arc(x,cy,r,a0,a1,sign<0);ctx.stroke();
+  const tx=x+r*Math.cos(a1),ty=cy+r*Math.sin(a1),tang=a1+sign*Math.PI/2,head=r*0.7;
+  ctx.beginPath();ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tang-sign*0.6),ty-head*Math.sin(tang-sign*0.6));ctx.moveTo(tx,ty);ctx.lineTo(tx-head*Math.cos(tang+sign*0.6),ty-head*Math.sin(tang+sign*0.6));ctx.stroke();
+  ctx.shadowBlur=0;ctx.fillStyle='#fff';ctx.font=`900 ${Math.round(H*0.045)}px system-ui`;ctx.fillText(String(n),x,cy+H*0.075);ctx.restore();}
+let t=0;
+function frame(id,dir,secs){const c=document.getElementById(id);c.width=c.clientWidth;c.height=c.clientWidth*9/16;const ctx=c.getContext('2d'),W=c.width,H=c.height;
+  bg(ctx,W,H);school(ctx,H);clock(ctx,W/2,H*0.11,H,secs,t);nextHint(ctx,W,H,dir==='R'?'F':'R',8);
+  const R=Math.min(W,H)*0.26,cx=W/2,cy=H*0.50;
+  dirArrow(ctx,cx,cy,R,dir,dir==='R'?colorR:colorA,t);
+  ctx.font=`${Math.round(H*0.09)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('🖐',cx-W*0.24,H*0.33);ctx.fillText('🖐',cx+W*0.24,H*0.33);}
+function tick(){t+=0.05;frame('cF','F',229);frame('cR','R',8);requestAnimationFrame(tick);}tick();
+</script></body></html>
