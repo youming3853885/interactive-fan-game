@@ -23,6 +23,9 @@ const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
 ui.onComboBurst = (t) => sfx.comboBurst(t);
+ui.onScoreTick = () => sfx.scoreTick();
+let lastBeat = -1, lastCountSec = -1; // 合拍打點 / 倒數滴答用
+let victoryResult = null;
 
 // ---- 連接 Arduino（放進「設定」彈窗，於選歌畫面設定；進遊戲後退場）----
 const arduinoBtn = document.createElement('button');
@@ -103,6 +106,7 @@ function startPlaying() {
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
   startTime = performance.now();
   last = startTime;
+  lastBeat = -1; lastCountSec = -1; victoryResult = null;
   phase = 'playing';
   mvVideo.addEventListener('loadedmetadata', () => {
     const sl = mvVideo.duration;
@@ -204,22 +208,28 @@ async function loop(pose) {
     const { current, next, remain } = segmentAt(chart, elapsed);
     const segDir = current ? current.dir : 'S';
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
+    let scored = false, hiCombo = false;
+    const endRound = (result, win) => {
+      ended = true; phase = 'victory'; victoryResult = result; sendStop(); mvVideo.pause(); sfx.fanfare(win);
+      setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 6000);
+    };
     if (mode === 'single') {
+      const prev = scoreS.score;
       scoreS = scoreStep(scoreS, segDir, omegaS, dt, bpm, SCORE_CFG);
+      scored = scoreS.score > prev; hiCombo = comboMultiplier(scoreS.combo, SCORE_CFG) >= 3;
       const fs = fanCommand(omegaS, CONFIG);
       const energy = Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100);
       sender.send(formatCommand({ ...fs, energy }, { ...fs, energy })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle,
         score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), hand: handS });
-      if (!ended && elapsed >= roundSec) {
-        ended = true; phase = 'victory'; sendStop(); mvVideo.pause();
-        ui.victory({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, SCORE_CFG) });
-        setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 5000);
-      }
+      if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, SCORE_CFG) }, true);
     } else {
+      const pa = scoreA.score, pb = scoreB.score;
       scoreA = scoreStep(scoreA, segDir, omegaA, dt, bpm, SCORE_CFG);
       scoreB = scoreStep(scoreB, segDir, omegaB, dt, bpm, SCORE_CFG);
+      scored = scoreA.score > pa || scoreB.score > pb;
+      hiCombo = Math.max(comboMultiplier(scoreA.combo, SCORE_CFG), comboMultiplier(scoreB.combo, SCORE_CFG)) >= 3;
       const fa = fanCommand(omegaA, CONFIG), fb = fanCommand(omegaB, CONFIG);
       sender.send(formatCommand(
         { ...fa, energy: Math.min(100, scoreA.score / SCORE_CFG.scoreForFullBar * 100) },
@@ -229,13 +239,19 @@ async function loop(pose) {
         A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA },
         B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB } });
       if (!ended && elapsed >= roundSec) {
-        ended = true; phase = 'victory'; sendStop(); mvVideo.pause();
-        ui.victory({ mode: 'dual', who: higherScore(scoreA.score, scoreB.score), scoreA: scoreA.score, scoreB: scoreB.score });
-        setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 5000);
+        const who = higherScore(scoreA.score, scoreB.score);
+        endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);
       }
     }
+    // 合拍打點：每拍最多一次，且當幀有得分才響
+    const beat = Math.floor(elapsed * bpm / 60);
+    if (beat !== lastBeat) { lastBeat = beat; if (scored) sfx.hit(hiCombo); }
+    // 倒數滴答（最後 10 秒每秒一聲，最後 3 秒更急）
+    const sec = Math.ceil(timeLeft);
+    if (timeLeft <= 10 && sec !== lastCountSec) { lastCountSec = sec; if (sec > 0) sfx.countTick(sec <= 3); }
+  } else if (phase === 'victory') {
+    if (victoryResult) ui.victory(victoryResult); // 逐幀播放華麗結算動畫
   }
-  // phase 'loading'/'victory' 時不更新遊戲，等狀態切換
 
   requestAnimationFrame(() => loop(pose));
 }

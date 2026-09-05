@@ -24,4 +24,15 @@ export const sfx = {
     const base = 440 * Math.pow(1.12, tier);
     [0, 80, 160].forEach((d, k) => setTimeout(() => blip(base * (1 + k * 0.25), 0.12, 'square', 0.16), d));
   },
+  // 合拍打點：畫對且合拍每拍一聲；strong=combo 高時更亮更脆
+  hit(strong) {
+    blip(strong ? 1568 : 1175, 0.05, 'square', 0.12);
+    blip(strong ? 2349 : 1760, 0.04, 'sine', 0.06);
+  },
+  scoreTick() { blip(1046, 0.03, 'triangle', 0.06); },   // 得分連擊輕脆聲
+  countTick(last) { blip(last ? 1320 : 880, 0.07, 'square', last ? 0.16 : 0.11); }, // 倒數滴答，最後一聲更高
+  fanfare(win) {
+    const seq = win ? [523, 659, 784, 1047, 1319] : [523, 494, 440];
+    seq.forEach((f, k) => setTimeout(() => blip(f, 0.2, 'triangle', 0.16), k * 120));
+  },
 };

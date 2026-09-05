@@ -21,6 +21,8 @@ export function createUI(canvas) {
   let prevCombo = { A: 1, B: 1, S: 1 };
   // 得分手感：每累積 FLOAT_STEP 分就從得分處噴一個「+N」上浮字
   const floaters = [];
+  const trails = { S: [], A: [], B: [] };  // 手部拖尾
+  const fireworks = [];                     // 結算煙火
   const FLOAT_STEP = 100;
   const scoreAcc = { S: 0, A: 0, B: 0 }, prevScoreVal = { S: 0, A: 0, B: 0 };
   function scoreJuice(key, score, x, y, color) {
@@ -31,6 +33,71 @@ export function createUI(canvas) {
     while (scoreAcc[key] >= FLOAT_STEP && n < 3) { // 單幀最多噴 3 個避免爆量
       scoreAcc[key] -= FLOAT_STEP; n++;
       floaters.push({ x: x + ((floaters.length % 3) - 1) * canvas.width * 0.02, y, vy: -canvas.height * 0.012, life: 1, color, text: '+' + FLOAT_STEP });
+      if (api.onScoreTick) api.onScoreTick();
+    }
+  }
+  function pushTrail(key, pt) {
+    const tr = trails[key];
+    if (!pt) { tr.length = 0; return; }
+    tr.push({ x: pt.x, y: pt.y }); if (tr.length > 14) tr.shift();
+  }
+  function drawTrail(key, color) {
+    const tr = trails[key]; if (tr.length < 2) return;
+    const H = canvas.height;
+    ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 16;
+    for (let i = 1; i < tr.length; i++) {
+      const f = i / tr.length;
+      ctx.globalAlpha = f * 0.7; ctx.lineWidth = H * 0.02 * f + 2;
+      ctx.beginPath(); ctx.moveTo(tr[i - 1].x, tr[i - 1].y); ctx.lineTo(tr[i].x, tr[i].y); ctx.stroke();
+    }
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  // combo 等級 → 全畫面邊框光暈升級（越高越亮越華麗）
+  function drawComboAura(mult) {
+    if (mult < 2) return;
+    const W = canvas.width, H = canvas.height, t = Math.min(1, (mult - 1) / 4);
+    const col = mult >= 5 ? '#ff3bd0' : mult >= 4 ? '#ff6b3b' : mult >= 3 ? '#ffd76b' : '#4ec3ff';
+    const pulse = 0.65 + 0.35 * Math.sin(guidePhase * 4);
+    ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 45 * t * pulse; ctx.strokeStyle = col;
+    ctx.globalAlpha = 0.55 * t; ctx.lineWidth = Math.max(6, H * 0.03 * t);
+    ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, W - ctx.lineWidth, H - ctx.lineWidth);
+    ctx.restore(); ctx.globalAlpha = 1;
+  }
+  function spawnFirework(x, y, color) {
+    for (let i = 0; i < 22; i++) {
+      const a = (i / 22) * Math.PI * 2, sp = 4 + (i % 4);
+      fireworks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
+    }
+  }
+  function drawFireworks() {
+    const H = canvas.height;
+    for (let i = fireworks.length - 1; i >= 0; i--) {
+      const p = fireworks[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.vx *= 0.98; p.life -= 0.018;
+      if (p.life <= 0) { fireworks.splice(i, 1); continue; }
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.arc(p.x, p.y, H * 0.006, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+  let victoryKey = '', victoryT = 0;
+  function starPath(x, y, r) {
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const rr = i % 2 ? r * 0.45 : r, a = -Math.PI / 2 + i * Math.PI / 5;
+      const px = x + rr * Math.cos(a), py = y + rr * Math.sin(a);
+      i ? ctx.lineTo(px, py) : ctx.moveTo(px, py);
+    }
+    ctx.closePath();
+  }
+  function drawStars(cx, cy, n, ease) {
+    const H = canvas.height, R = H * 0.05, gap = H * 0.11;
+    for (let i = 0; i < 3; i++) {
+      const on = i < n, x = cx + (i - 1) * gap;
+      ctx.save(); ctx.translate(x, cy); ctx.scale(ease, ease);
+      starPath(0, 0, R);
+      ctx.fillStyle = on ? gold : '#ffffff22';
+      if (on) { ctx.shadowColor = gold; ctx.shadowBlur = 22; }
+      ctx.fill(); ctx.shadowBlur = 0; ctx.restore();
     }
   }
   function drawFloaters() {
@@ -360,6 +427,7 @@ export function createUI(canvas) {
     handInTarget,
     clear,
     onComboBurst: null,
+    onScoreTick: null,
     boxHit(hand, side) {
       return hand ? pointInBox(hand, boxFor(side, canvas.width, canvas.height)) : false;
     },
@@ -375,11 +443,13 @@ export function createUI(canvas) {
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
+      const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
+      drawComboAura(maxMult); // combo 等級 → 全畫面光環升級
       if (state.mode === 'single') {
         // 圓心大旋轉箭頭（正轉藍/反轉紅），無外圈；單手
         const R = Math.min(W, H) * 0.26;
         dirArrow({ x: W * 0.5, y: H * 0.44 }, R, state.segDir, state.segDir === 'R' ? colorB : colorA);
-        drawHand(state.hand, colorA);
+        pushTrail('S', state.hand); drawTrail('S', colorA); drawHand(state.hand, colorA);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
           frac: gFrac(state.score), score: state.score, comboMult: state.comboMult, label: 'YOU', showLR: false });
         scoreJuice('S', state.score, W * 0.5, H * 0.72, gold);
@@ -389,6 +459,7 @@ export function createUI(canvas) {
         const R = Math.min(W, H) * 0.22;
         for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           dirArrow({ x: cx * W, y: H * 0.44 }, R, state.segDir, color); // 各側玩家色大箭頭
+          pushTrail(side, state[side].hand); drawTrail(side, color);
           drawHand(state[side].hand, color);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
             frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
@@ -409,24 +480,39 @@ export function createUI(canvas) {
       drawBursts();
     },
 
+    // 華麗結算（逐幀動畫）：評級彈出 + 分數 count-up + 星星 + 週期煙火。主迴圈每幀呼叫。
     victory(result) {
-      ctx.fillStyle = '#000c'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const W = canvas.width, H = canvas.height, cx = W / 2;
+      const key = JSON.stringify(result);
+      if (key !== victoryKey) { victoryKey = key; victoryT = 0; fireworks.length = 0; }
+      victoryT++;
+      const p = Math.min(1, victoryT / 45), ease = 1 - Math.pow(1 - p, 3); // 入場彈跳
+      ctx.fillStyle = '#000d'; ctx.fillRect(0, 0, W, H);
+      // 週期煙火
+      if (victoryT % 16 === 0) {
+        const cols = ['#ffd76b', '#4ec3ff', '#ff6bd0', '#8effc0'];
+        spawnFirework(W * (0.25 + 0.5 * ((victoryT / 16) % 2)), H * (0.22 + 0.1 * ((victoryT / 32) % 2)), cols[(victoryT / 16) % cols.length]);
+      }
+      drawFireworks();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      const cx = canvas.width / 2, H = canvas.height;
       if (result.mode === 'single') {
-        ctx.fillStyle = '#ffd76b'; ctx.font = `900 ${Math.round(H * 0.16)}px system-ui`;
-        ctx.fillText(result.grade, cx, H * 0.4);
-        ctx.fillStyle = '#fff'; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
-        ctx.fillText(`分數 ${Math.round(result.score)}`, cx, H * 0.58);
+        const stars = { S: 3, A: 2, B: 1, C: 0 }[result.grade] ?? 0;
+        drawStars(cx, H * 0.24, stars, ease);
+        ctx.save(); ctx.translate(cx, H * 0.44); ctx.scale(0.3 + ease * 0.7, 0.3 + ease * 0.7);
+        ctx.fillStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 40; ctx.font = `900 ${Math.round(H * 0.22)}px system-ui`;
+        ctx.fillText(result.grade, 0, 0); ctx.restore();
+        ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.06)}px system-ui`;
+        ctx.fillText(`分數 ${Math.round(result.score * ease)}`, cx, H * 0.64);
       } else {
+        ctx.save(); ctx.translate(cx, H * 0.4); ctx.scale(0.3 + ease * 0.7, 0.3 + ease * 0.7);
         ctx.fillStyle = result.who === 'A' ? colorA : result.who === 'B' ? colorB : '#fff';
-        ctx.font = `900 ${Math.round(H * 0.1)}px system-ui`;
-        ctx.fillText(result.who ? `玩家 ${result.who} 勝利！` : '平手！', cx, H * 0.4);
-        ctx.fillStyle = '#fff'; ctx.font = `${Math.round(H * 0.05)}px system-ui`;
-        ctx.fillText(`A ${Math.round(result.scoreA)} : ${Math.round(result.scoreB)} B`, cx, H * 0.56);
+        ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 30; ctx.font = `900 ${Math.round(H * 0.11)}px system-ui`;
+        ctx.fillText(result.who ? `玩家 ${result.who} 勝利！` : '平手！', 0, 0); ctx.restore();
+        ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.055)}px system-ui`;
+        ctx.fillText(`A ${Math.round(result.scoreA * ease)} : ${Math.round(result.scoreB * ease)} B`, cx, H * 0.6);
       }
       ctx.fillStyle = '#aeb4d8'; ctx.font = `${Math.round(H * 0.025)}px system-ui`;
-      ctx.fillText(SCHOOL, cx, H * 0.7);
+      ctx.shadowBlur = 0; ctx.fillText(SCHOOL, cx, H * 0.78);
     },
   };
   return api;
