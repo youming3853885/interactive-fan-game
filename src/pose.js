@@ -11,6 +11,7 @@ export async function createPoseReader(video) {
   const cfg = { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING };
   const detA = await poseDetection.createDetector(model, cfg);
   const detB = await poseDetection.createDetector(model, cfg);
+  const detFull = await poseDetection.createDetector(model, cfg);
 
   // 離屏畫布，各裝一半畫面
   const half = document.createElement('canvas');
@@ -36,6 +37,15 @@ export async function createPoseReader(video) {
   return {
     async read() {
       return { A: await readSide(detA, 'A'), B: await readSide(detB, 'B') };
+    },
+    async readFull() {
+      const poses = await detFull.estimatePoses(video);
+      if (!poses.length) return null;
+      const kp = Object.fromEntries(poses[0].keypoints.map((k) => [k.name, k]));
+      return {
+        leftWrist: kp['left_wrist'], leftShoulder: kp['left_shoulder'],
+        rightWrist: kp['right_wrist'], rightShoulder: kp['right_shoulder'],
+      };
     },
   };
 }
