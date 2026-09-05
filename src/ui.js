@@ -307,12 +307,13 @@ export function createUI(canvas) {
     }
     // 分數 + Combo（條上方）
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.55)}px system-ui`;
-    ctx.fillText(`得分：${Math.round(o.score)} 分`, x + w * 0.5, y - h * 0.28);
-    if (o.combo >= 2) { // 連續圈數，每轉一圈就 +1 往上爬
-      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.5)}px system-ui`;
-      ctx.fillText(`COMBO ${o.combo}`, x + w * 0.85, y - h * 0.28);
+    // COMBO 置上一行(略小)、得分置下一行 → 上下堆疊不重疊
+    if (o.combo >= 2) {
+      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.42)}px system-ui`;
+      ctx.fillText(`COMBO ${o.combo}`, x + w * 0.5, y - h * 0.62);
     }
+    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.5)}px system-ui`;
+    ctx.fillText(`得分：${Math.round(o.score)} 分`, x + w * 0.5, y - h * 0.16);
   }
 
   function resize() {

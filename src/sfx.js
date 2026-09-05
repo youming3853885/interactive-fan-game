@@ -35,15 +35,17 @@ export const sfx = {
     const seq = win ? [523, 659, 784, 1047, 1319] : [523, 494, 440];
     seq.forEach((f, k) => setTimeout(() => blip(f, 0.2, 'triangle', 0.16), k * 120));
   },
-  // 語音判定：優先播 public/voice/{word}.wav（可換成自己錄的真人聲），沒有才退回 TTS。
+  // 語音判定：用 WebAudio 播放（可放大音量），播 public/voice/{word}.mp3|wav；缺檔退回 TTS。
   voice(text) {
     const key = String(text).toLowerCase();
-    const clip = voiceClips[key];
-    if (clip && clip.readyState >= 2) {
+    const buf = voiceBuffers[key];
+    if (buf) {
       try {
-        const n = clip.cloneNode(); n.volume = 0.95;
-        n.playbackRate = 1.0 + (Math.random() * 0.12 - 0.04); // 微變速，較活
-        n.play().catch(() => ttsSpeak(text));
+        const a = getAudioContext();
+        const s = a.createBufferSource(); s.buffer = buf;
+        s.playbackRate.value = 1.0 + (Math.random() * 0.08 - 0.03);
+        const g = a.createGain(); g.gain.value = VOICE_GAIN; // 放大真人語音
+        s.connect(g); g.connect(a.destination); s.start();
         return;
       } catch { /* 落到 TTS */ }
     }
@@ -51,18 +53,24 @@ export const sfx = {
   },
 };
 
-// 預載語音檔（放 public/voice/；優先 .mp3（自己錄/AI 生的真人聲），沒有退 .wav，再沒有退 TTS）。
-const voiceClips = {};
-try {
-  const base = import.meta.env.BASE_URL;
-  for (const w of ['great', 'perfect']) { // 只有這兩級用真人語音；GOOD/COMBO 用遊戲音效
-    const a = new Audio();
-    a.preload = 'auto'; a.volume = 0.95;
-    a.src = base + `voice/${w}.mp3`;
-    a.addEventListener('error', function onErr() { a.removeEventListener('error', onErr); a.src = base + `voice/${w}.wav`; }, { once: true });
-    voiceClips[w] = a;
-  }
-} catch { /* 忽略 */ }
+// 預載語音為 AudioBuffer（可加增益放大）。優先 .mp3（自錄/AI 真人聲），沒有退 .wav。
+const VOICE_GAIN = 2.6;
+const voiceBuffers = {};
+(async () => {
+  try {
+    const base = import.meta.env.BASE_URL, ctx = getAudioContext();
+    for (const w of ['great', 'perfect']) {
+      for (const ext of ['mp3', 'wav']) {
+        try {
+          const r = await fetch(base + `voice/${w}.${ext}`);
+          if (!r.ok) continue;
+          voiceBuffers[w] = await ctx.decodeAudioData(await r.arrayBuffer());
+          break;
+        } catch { /* 試下一個副檔名 */ }
+      }
+    }
+  } catch { /* 忽略 */ }
+})();
 
 function ttsSpeak(text) {
   try {

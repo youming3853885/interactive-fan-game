@@ -249,14 +249,15 @@ async function loop(pose) {
     const ON = 1.2, OFF = 0.5; // 遲滯門檻（rad/s）
     const MAXW = 16; // marker 最高角速度上限（rad/s，避免爆衝）
     const stepPlayer = (st, omega, cx, cy, color) => {
-      st.oEMA += 0.4 * (omega - st.oEMA); // 平滑真實角速度（跟手但不抖）
+      const o = Math.max(-MAXW, Math.min(MAXW, omega)); // 先夾掉單幀尖刺
+      st.oEMA += 0.22 * (o - st.oEMA);                   // 較重平滑（跟手但更順）
       const correctSign = dirSign > 0 ? st.oEMA > 0 : st.oEMA < 0;
       if (segDir === 'S') st.active = false;
       else if (!st.active && correctSign && Math.abs(st.oEMA) > ON) st.active = true;
       else if (st.active && (!correctSign || Math.abs(st.oEMA) < OFF)) st.active = false;
-      // marker 速度＝跟隨你的真實轉速（平滑後），轉快就快、轉慢就慢；再做緩加減速避免硬啟停。
-      const targetSpd = st.active ? Math.min(MAXW, Math.abs(st.oEMA)) : 0;
-      st.spd += (targetSpd - st.spd) * Math.min(1, dt * 10);
+      // marker 速度＝跟隨真實轉速(平滑後)，再做更緩的加/減速 → 轉動滑順不頓
+      const targetSpd = st.active ? Math.abs(st.oEMA) : 0;
+      st.spd += (targetSpd - st.spd) * Math.min(1, dt * 6);
       if (st.spd > 0.02) {
         st.mAng += dirSign * st.spd * dt;
         st.mAcc += st.spd * dt;
