@@ -72,7 +72,7 @@ const rotB = { lastAngle: null };
 const rotS = { lastAngle: null }; // 單人單手
 // 手部顯示平滑（EMA 去抖，只影響畫面亮點/就位判定，不影響轉速計分）
 const smA = { x: null, y: null, miss: 0 }, smB = { x: null, y: null, miss: 0 }, smS = { x: null, y: null, miss: 0 };
-const SMOOTH = 0.3;  // 越小越穩但越延遲
+const SMOOTH = 0.55; // 手部顯示平滑：越大越跟手(近1:1)、越小越穩
 const COAST = 10;    // 偵測掉幀時最多沿用上一位置的幀數（避免閃爍）
 function smoothPoint(s, pt, a) {
   if (pt) {
@@ -285,7 +285,7 @@ async function loop(pose) {
       sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
-        markerAngle: m.markerAngle, active: m.active });
+        hand: handS, active: m.active });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
@@ -294,8 +294,8 @@ async function loop(pose) {
       sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
         barStyle: settings.barStyle,
-        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA.markerAngle, active: mA.active },
-        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB.markerAngle, active: mB.active } });
+        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active },
+        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);

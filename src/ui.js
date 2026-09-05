@@ -21,9 +21,11 @@ export function createUI(canvas) {
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
   const bursts = [];
   let prevCombo = { A: 1, B: 1, S: 1 };
-  const trails = { S: [], A: [], B: [] };  // 手 marker 流星尾
+  const trails = { S: [], A: [], B: [] };  // 手流星尾
   const fireworks = [];                     // 結算煙火
-  const judges = [];                         // 判定文字特效 EXCELLENT/GREAT/GOOD
+  const judges = [];                         // 判定文字特效 GOOD/GREAT/PERFECT
+  const comboPulse = { S: 0, A: 0, B: 0 };   // combo 增加時的彈跳動畫
+  const prevComboN = { S: 0, A: 0, B: 0 };
   // 判定特效（每轉完一圈觸發）：大字彈出 + 上浮 + 淡出，附 +分數。
   function judge(word, pts, mult, x, y, color) {
     judges.push({ word, pts, mult, x, y, color, life: 1 });
@@ -70,9 +72,11 @@ export function createUI(canvas) {
     }
     ctx.restore(); ctx.globalAlpha = 1;
   }
-  // 手 marker：鎖在圈上（angle 由 main 依累積角度算），流星尾 + 飄散粒子。
-  function drawMarker(key, cx, cy, R, angle, color, active) {
-    const H = canvas.height, mx = cx + R * Math.cos(angle), my = cy + R * Math.sin(angle);
+  // 手：畫在真實偵測位置（近乎跟手），流星尾 + 畫圈時飄散粒子。
+  function drawHandFX(key, pt, color, active) {
+    const H = canvas.height;
+    if (!pt) { pushTrail(key, null); return; }
+    const mx = pt.x, my = pt.y;
     pushTrail(key, { x: mx, y: my });
     drawMeteor(key, color);
     if (active) { // 沿路飄散不規則粒子
@@ -307,12 +311,20 @@ export function createUI(canvas) {
     }
     // 分數 + Combo（條上方）
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    // COMBO 置上一行(略小)、得分置下一行 → 上下堆疊不重疊
+    // COMBO 置上一行(略小)、得分置下一行 → 上下堆疊不重疊；combo 增加時彈跳+發光
+    const key = o.key || 'S';
+    if (o.combo > prevComboN[key]) comboPulse[key] = 1;
+    prevComboN[key] = o.combo;
+    comboPulse[key] *= 0.86;
     if (o.combo >= 2) {
-      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.42)}px system-ui`;
-      ctx.fillText(`COMBO ${o.combo}`, x + w * 0.5, y - h * 0.62);
+      const pl = comboPulse[key], cyC = y - h * 0.62;
+      ctx.save(); ctx.translate(x + w * 0.5, cyC); ctx.scale(1 + pl * 0.6, 1 + pl * 0.6);
+      ctx.fillStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 8 + pl * 26;
+      ctx.font = `900 ${Math.round(h * 0.42)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+      ctx.fillText(`COMBO ${o.combo}`, 0, 0); ctx.restore();
     }
     ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.5)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillText(`得分：${Math.round(o.score)} 分`, x + w * 0.5, y - h * 0.16);
   }
 
@@ -517,9 +529,9 @@ export function createUI(canvas) {
       drawComboAura(maxMult); // combo 等級 → 全畫面光環升級
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
-        dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭（縮小）
-        drawMarker('S', cx, cy, R, state.markerAngle, colorA, state.active); // 手鎖圈上（軌道隱藏）
-        drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
+        dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
+        drawHandFX('S', state.hand, colorA, state.active); // 手畫在真實位置（近乎跟手）
+        drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
           frac: gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false });
         if (state.comboMult > prevCombo.S) { triggerBurst(cx, cy, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
@@ -528,8 +540,8 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
-          drawMarker(side, cx, cy, R, state[side].markerAngle, color, state[side].active);
-          drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
+          drawHandFX(side, state[side].hand, color, state[side].active);
+          drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
             frac: gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
             label: '', showLR: false });
           if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx, cy, color, state[side].comboMult); flash(color); }
