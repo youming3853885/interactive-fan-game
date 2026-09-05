@@ -1,27 +1,54 @@
 import { saveSettings, defaultTrackSetting } from './settings.js';
 
-// 齒輪按鈕 + 設定面板：全域鏡頭透明度 + 每首歌 開始/停止/音量/MV透明度。
+// 齒輪按鈕 + 設定彈窗(modal)：硬體連接(Arduino) + 全域鏡頭透明度 + 每首歌設定。
 // 任何變更即時套用(media.applySettings)並存 localStorage。
-export function createSettingsPanel(hud, settings, media) {
+export function createSettingsPanel(hud, settings, media, arduino) {
   const gear = document.createElement('button');
   gear.textContent = '⚙ 設定';
   gear.style.cssText =
-    'position:absolute;top:8px;right:12px;background:#222b;color:#fff;border:1px solid #fff5;border-radius:8px;padding:6px 10px;cursor:pointer;';
+    'position:absolute;top:10px;right:12px;z-index:6;background:#222b;color:#fff;border:1px solid #fff5;' +
+    'border-radius:8px;padding:8px 14px;cursor:pointer;font-size:15px;';
 
-  const panel = document.createElement('div');
-  panel.style.cssText =
-    'position:absolute;top:48px;right:12px;width:340px;max-height:80vh;overflow:auto;' +
-    'background:#12131cf2;color:#fff;border:1px solid #fff3;border-radius:12px;padding:16px;' +
-    'display:none;pointer-events:auto;font-size:14px;';
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText =
+    'position:absolute;inset:0;display:none;align-items:center;justify-content:center;' +
+    'background:#000a;pointer-events:auto;z-index:30;';
 
-  gear.addEventListener('click', () => {
-    panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-  });
+  const modal = document.createElement('div');
+  modal.style.cssText =
+    'width:min(92vw,420px);max-height:86vh;overflow:auto;background:#12131cf7;color:#fff;' +
+    'border:1px solid #fff3;border-radius:14px;padding:20px;font-size:14px;box-shadow:0 20px 60px #000a;';
+  backdrop.appendChild(modal);
 
-  function changed() {
-    saveSettings(settings);
-    media.applySettings();
+  const head = document.createElement('div');
+  head.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;';
+  const title = document.createElement('div');
+  title.textContent = '設定'; title.style.cssText = 'font-size:18px;font-weight:bold;';
+  const closeBtn = document.createElement('button');
+  closeBtn.textContent = '✕';
+  closeBtn.style.cssText = 'background:transparent;color:#fff;border:none;font-size:20px;cursor:pointer;';
+  head.append(title, closeBtn);
+  modal.append(head);
+
+  // 硬體連接（Arduino）
+  if (arduino) {
+    const box = document.createElement('div');
+    box.style.cssText = 'margin-bottom:14px;padding:12px;background:#ffffff10;border-radius:8px;display:flex;flex-direction:column;gap:8px;';
+    const t = document.createElement('div'); t.textContent = '硬體連接（Arduino）'; t.style.cssText = 'font-weight:bold;';
+    box.append(t, arduino.btn, arduino.status);
+    modal.append(box);
   }
+
+  const body = document.createElement('div');
+  modal.append(body);
+
+  const open = () => { backdrop.style.display = 'flex'; };
+  const close = () => { backdrop.style.display = 'none'; };
+  gear.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+
+  function changed() { saveSettings(settings); media.applySettings(); }
 
   function row(labelText, input) {
     const r = document.createElement('label');
@@ -33,16 +60,16 @@ export function createSettingsPanel(hud, settings, media) {
   }
 
   function slider(min, max, value, onInput) {
-    const box = document.createElement('span');
-    box.style.cssText = 'display:flex;align-items:center;gap:6px;';
+    const boxEl = document.createElement('span');
+    boxEl.style.cssText = 'display:flex;align-items:center;gap:6px;';
     const range = document.createElement('input');
     range.type = 'range'; range.min = min; range.max = max; range.value = value;
     range.style.width = '140px';
     const num = document.createElement('span');
     num.textContent = value; num.style.minWidth = '32px'; num.style.textAlign = 'right';
     range.addEventListener('input', () => { num.textContent = range.value; onInput(Number(range.value)); });
-    box.append(range, num);
-    return box;
+    boxEl.append(range, num);
+    return boxEl;
   }
 
   function numInput(value, onInput) {
@@ -53,19 +80,13 @@ export function createSettingsPanel(hud, settings, media) {
   }
 
   function render() {
-    panel.replaceChildren();
-    const title = document.createElement('div');
-    title.textContent = '設定';
-    title.style.cssText = 'font-size:16px;font-weight:bold;margin-bottom:8px;';
-    panel.append(title);
-
-    // 全域：鏡頭透明度（越低越看得到背景 MV）
-    panel.append(row('鏡頭透明度（越低越看得到MV）',
+    body.replaceChildren();
+    body.append(row('鏡頭透明度（越低越看得到MV）',
       slider(0, 100, settings.cameraOpacity, (v) => { settings.cameraOpacity = v; changed(); })));
 
     const hr = document.createElement('hr');
     hr.style.cssText = 'border-color:#fff2;margin:10px 0;';
-    panel.append(hr);
+    body.append(hr);
 
     for (const t of media.tracks) {
       const cfg = settings.perTrack[t.id] || (settings.perTrack[t.id] = defaultTrackSetting());
@@ -79,11 +100,11 @@ export function createSettingsPanel(hud, settings, media) {
       block.append(row('停止時間 (秒，0=到結尾)', numInput(cfg.end, (v) => { cfg.end = v; changed(); })));
       block.append(row('音量', slider(0, 100, cfg.volume, (v) => { cfg.volume = v; changed(); })));
       block.append(row('MV 透明度', slider(0, 100, cfg.mvOpacity, (v) => { cfg.mvOpacity = v; changed(); })));
-      panel.append(block);
+      body.append(block);
     }
   }
   render();
 
-  hud.append(gear, panel);
-  return { gear, panel };
+  hud.append(gear, backdrop);
+  return { gear, panel: backdrop };
 }

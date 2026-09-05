@@ -22,30 +22,25 @@ const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
 
-// ---- 連接 Arduino（在選歌畫面設定；進遊戲後退場）----
-const bar = document.createElement('div');
-bar.style.cssText = 'position:absolute;top:10px;left:12px;display:flex;gap:8px;z-index:6;';
-const btn = document.createElement('button');
-btn.textContent = '連接 Arduino（可選）';
-const simLog = document.createElement('span');
-simLog.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;align-self:center;';
-simLog.textContent = '示範模式（無需 Arduino）';
-bar.append(btn, simLog);
-hud.appendChild(bar);
+// ---- 連接 Arduino（放進「設定」彈窗，於選歌畫面設定；進遊戲後退場）----
+const arduinoBtn = document.createElement('button');
+arduinoBtn.textContent = '連接 Arduino';
+arduinoBtn.style.cssText = 'background:#2b7bff;color:#0b0b12;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700;';
+const arduinoStatus = document.createElement('span');
+arduinoStatus.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;';
+arduinoStatus.textContent = '示範模式（無需 Arduino，直接開始也能玩）';
 
-// 這三個控制項只在選歌畫面顯示，遊戲中全退場
-let sp = null;
-function showControls(v) {
-  bar.style.display = v ? 'flex' : 'none';
-  if (sp) { sp.gear.style.display = v ? 'block' : 'none'; if (!v) sp.panel.style.display = 'none'; }
-  if (media) media.root.style.display = v ? 'flex' : 'none';
-}
-
-let sender = simSender((line) => { simLog.textContent = line; });
-btn.addEventListener('click', async () => {
-  try { sender = await connectSerial(); btn.textContent = '已連接 (USB)'; btn.disabled = true; }
+let sender = simSender((line) => { arduinoStatus.textContent = line; });
+arduinoBtn.addEventListener('click', async () => {
+  try { sender = await connectSerial(); arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true; }
   catch (e) { alert(e.message); }
 });
+
+// 設定齒輪只在選歌畫面顯示，遊戲中退場
+let sp = null;
+function showControls(v) {
+  if (sp) { sp.gear.style.display = v ? 'block' : 'none'; if (!v) sp.panel.style.display = 'none'; }
+}
 
 // ---- 遊戲狀態 ----
 const READY_NEED = 5;
@@ -121,9 +116,7 @@ async function boot() {
   }
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
-  media.root.style.zIndex = 6;
-  sp = createSettingsPanel(hud, settings, media);
-  sp.gear.style.zIndex = 6; sp.panel.style.zIndex = 6;
+  sp = createSettingsPanel(hud, settings, media, { btn: arduinoBtn, status: arduinoStatus });
   selectScreen = createSelectScreen(hud, (idx, mode) => {
     selectedIdx = idx;
     lenMode = mode;
