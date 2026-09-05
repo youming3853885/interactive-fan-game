@@ -138,10 +138,10 @@ export function createUI(canvas) {
     ctx.fillStyle = '#00000066'; ctx.fill();
     ctx.shadowColor = color; ctx.shadowBlur = 24;
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.stroke();
-    // 中央實心亮點（取代手掌 emoji）
-    ctx.beginPath(); ctx.arc(pt.x, pt.y, H * 0.026, 0, Math.PI * 2);
-    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.fill();
     ctx.restore();
+    ctx.font = `${Math.round(H * 0.10)}px system-ui`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('🖐', pt.x, pt.y);
   }
 
   // 最上層：畫圓運動導引。虛線圓 = 要畫的軌跡；亮點沿圓移動 = 該畫的方向。
