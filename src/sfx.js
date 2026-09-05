@@ -35,15 +35,33 @@ export const sfx = {
     const seq = win ? [523, 659, 784, 1047, 1319] : [523, 494, 440];
     seq.forEach((f, k) => setTimeout(() => blip(f, 0.2, 'triangle', 0.16), k * 120));
   },
-  // 勁舞團式語音判定：用瀏覽器內建 TTS 說 Good/Great/Excellent/Combo（免素材）。
+  // 勁舞團式語音判定：瀏覽器 TTS，挑較自然的英語嗓音 + 每次語調微變化，較活潑不死板。
   voice(text) {
     try {
       const s = window.speechSynthesis; if (!s) return;
-      const u = new SpeechSynthesisUtterance(text);
-      u.rate = 1.15; u.pitch = 1.1; u.volume = 1;
-      const en = s.getVoices().find((v) => /en(-|_|$)/i.test(v.lang));
-      if (en) u.voice = en;
+      const u = new SpeechSynthesisUtterance(text + '!');
+      const v = pickNaturalVoice(s);
+      if (v) u.voice = v;
+      u.lang = 'en-US';
+      u.rate = 1.02 + (Math.random() * 0.1 - 0.03);   // 微變速
+      u.pitch = 1.25 + (Math.random() * 0.3 - 0.12);  // 微變調（活潑）
+      u.volume = 1;
       s.cancel(); s.speak(u);
     } catch { /* 忽略 */ }
   },
 };
+
+let _naturalVoice;
+function pickNaturalVoice(s) {
+  if (_naturalVoice !== undefined) return _naturalVoice;
+  const vs = s.getVoices() || [];
+  if (!vs.length) return null; // 尚未載入，下次再挑
+  // 優先挑「神經/自然」嗓音，其次一般英語
+  const prefs = [/natural/i, /neural/i, /google us english/i, /samantha/i, /aria|jenny|guy/i, /google/i, /en[-_]us/i, /en[-_]/i];
+  for (const re of prefs) {
+    const v = vs.find((x) => re.test(x.name) || re.test(x.lang));
+    if (v) { _naturalVoice = v; return v; }
+  }
+  _naturalVoice = vs[0]; return _naturalVoice;
+}
+try { if (window.speechSynthesis) window.speechSynthesis.onvoiceschanged = () => { _naturalVoice = undefined; }; } catch { /* 忽略 */ }

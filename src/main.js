@@ -268,7 +268,7 @@ async function loop(pose) {
       const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
       sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
-        barStyle: settings.barStyle, score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
+        barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         markerAngle: m.markerAngle, active: m.active });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
     } else {
@@ -278,8 +278,8 @@ async function loop(pose) {
       sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle,
-        A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA.markerAngle, active: mA.active },
-        B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB.markerAngle, active: mB.active } });
+        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA.markerAngle, active: mA.active },
+        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB.markerAngle, active: mB.active } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);

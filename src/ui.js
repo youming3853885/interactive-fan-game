@@ -262,9 +262,9 @@ export function createUI(canvas) {
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
     ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.55)}px system-ui`;
     ctx.fillText(`得分：${Math.round(o.score)} 分`, x + w * 0.5, y - h * 0.28);
-    if (o.comboMult > 1) {
+    if (o.combo >= 2) { // 連續圈數，每轉一圈就 +1 往上爬
       ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.5)}px system-ui`;
-      ctx.fillText(`COMBO x${o.comboMult}`, x + w * 0.85, y - h * 0.28);
+      ctx.fillText(`COMBO ${o.combo}`, x + w * 0.85, y - h * 0.28);
     }
   }
 
@@ -472,7 +472,7 @@ export function createUI(canvas) {
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭（縮小）
         drawMarker('S', cx, cy, R, state.markerAngle, colorA, state.active); // 手鎖圈上（軌道隱藏）
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
-          frac: gFrac(state.score), score: state.score, comboMult: state.comboMult, label: '', showLR: false });
+          frac: gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false });
         if (state.comboMult > prevCombo.S) { triggerBurst(cx, cy, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
@@ -482,7 +482,7 @@ export function createUI(canvas) {
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
           drawMarker(side, cx, cy, R, state[side].markerAngle, color, state[side].active);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
-            frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
+            frac: gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
             label: '', showLR: false });
           if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx, cy, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
