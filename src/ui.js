@@ -6,6 +6,14 @@ export function createUI(canvas) {
   const particles = [];
   const colorA = '#2b7bff', colorB = '#ff3b3b'; // 左藍 右紅（固定）
   const gold = '#ffd76b';
+  // 三款能量條底圖（codex 生成）+ 可填充通道座標（占底圖框的比例，端蓋已內縮避開）
+  const BAR_META = {
+    1: { chXL: 0.10, chXR: 0.90, chYT: 0.331, chYB: 0.620 }, // 科技HUD藍
+    2: { chXL: 0.11, chXR: 0.89, chYT: 0.363, chYB: 0.604 }, // 街機紅黃
+    3: { chXL: 0.10, chXR: 0.90, chYT: 0.324, chYB: 0.658 }, // 霓虹管
+  };
+  const barImgs = {};
+  for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.png`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   const SCHOOL = '🏫 澎湖縣湖西鄉龍門國民小學 · 畫圈對決';
@@ -42,67 +50,49 @@ export function createUI(canvas) {
     ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
     ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
   }
-  // 音樂遊戲風「實心」能量條：深玻璃外殼 + 玩家色實心漸層填充 + 分段細縫 + 前緣發光。
-  // o = { x, y, w, h, frac, score, comboMult, label, color, showLR, lActive, rActive }
-  function gaugePalette(color) {
-    if (color === colorB) return ['#6b0f1f', '#ff3b3b', '#ffb59a'];
-    return ['#0b2a6b', '#2b7bff', '#a6e4ff']; // 預設藍
-  }
+  // 能量條：codex 底圖(3款可選) + 未填滿處暗罩露出底圖=進度。
+  // o = { x, y, w, h, frac, score, comboMult, label, color, style, showLR, lActive, rActive }
   function drawGauge(o) {
     const { x, y, w, h } = o;
     const frac = Math.max(0, Math.min(1, o.frac));
-    const r = h * 0.5;
-    // 外殼：深色玻璃 + 玩家色邊框光
-    ctx.save();
-    roundRectPath(x, y, w, h, r);
-    ctx.fillStyle = '#0a0e1ad9'; ctx.fill();
-    ctx.lineWidth = Math.max(2, h * 0.10); ctx.strokeStyle = o.color || '#5bd6ff';
-    ctx.shadowColor = o.color || '#5bd6ff'; ctx.shadowBlur = 18; ctx.stroke();
-    ctx.restore();
-    // 內軌
-    const pad = h * 0.20, ix = x + pad, iy = y + pad, iw = w - pad * 2, ih = h - pad * 2, ir = ih * 0.5;
-    ctx.save();
-    roundRectPath(ix, iy, iw, ih, ir); ctx.clip();
-    ctx.fillStyle = '#05070f'; ctx.fillRect(ix, iy, iw, ih);
-    const fw = iw * frac;
-    if (fw > 0) {
-      const [c0, c1, c2] = gaugePalette(o.color);
-      const g = ctx.createLinearGradient(ix, 0, ix + iw, 0);
-      g.addColorStop(0, c0); g.addColorStop(0.55, c1); g.addColorStop(1, c2);
-      ctx.save();
-      ctx.shadowColor = o.color || c1; ctx.shadowBlur = 20;
-      ctx.fillStyle = g; ctx.fillRect(ix, iy, fw, ih);           // 實心填充
-      ctx.restore();
-      ctx.fillStyle = '#ffffff30'; ctx.fillRect(ix, iy, fw, ih * 0.38); // 頂部高光
-      // 前緣亮線
-      ctx.save(); ctx.shadowColor = '#fff'; ctx.shadowBlur = 16;
-      ctx.fillStyle = '#ffffffee'; ctx.fillRect(ix + fw - Math.max(2, h * 0.04), iy, Math.max(2, h * 0.06), ih);
-      ctx.restore();
+    const style = BAR_META[o.style] ? o.style : 1;
+    const meta = BAR_META[style], img = barImgs[style];
+    if (img.complete && img.naturalWidth) {
+      ctx.drawImage(img, x, y, w, h);
+      const chXL = x + w * meta.chXL, chXR = x + w * meta.chXR;
+      const chY = y + h * meta.chYT, chH = h * (meta.chYB - meta.chYT);
+      const fillX = chXL + frac * (chXR - chXL);
+      ctx.save(); ctx.globalAlpha = 0.8; ctx.fillStyle = '#02030a';
+      ctx.fillRect(fillX, chY, chXR - fillX, chH); ctx.restore();
+    } else { // 底圖未載入的退路：簡單實心條
+      ctx.save(); roundRectPath(x, y, w, h, h * 0.5); ctx.fillStyle = '#0a0e1ad9'; ctx.fill();
+      ctx.fillStyle = o.color || '#5bd6ff'; ctx.fillRect(x + h * 0.2, y + h * 0.3, (w - h * 0.4) * frac, h * 0.4); ctx.restore();
     }
-    // 分段細縫（科技感）：等距暗色直縫切過整條
-    const segW = ih * 0.9, gaps = Math.max(6, Math.round(iw / segW));
-    ctx.fillStyle = '#00000066';
-    for (let i = 1; i < gaps; i++) ctx.fillRect(ix + (iw / gaps) * i - h * 0.015, iy, Math.max(1, h * 0.03), ih);
-    ctx.restore();
-    // 兩端 L / R 指示燈（僅單人）
+    // 玩家色外框光暈（雙人辨識 A/B）
+    if (o.color) {
+      ctx.save(); ctx.strokeStyle = o.color; ctx.lineWidth = Math.max(2, h * 0.05);
+      ctx.shadowColor = o.color; ctx.shadowBlur = 16;
+      roundRectPath(x + w * 0.01, y + h * 0.06, w * 0.98, h * 0.88, h * 0.4); ctx.stroke(); ctx.restore();
+    }
+    // 兩端 L / R 指示環（僅單人）：該手正確畫圈才亮
     if (o.showLR) {
-      for (const [cx, on, col, txt] of [[x + r, o.lActive, colorA, 'L'], [x + w - r, o.rActive, colorR, 'R']]) {
-        const cyy = y + h * 0.5, rr = h * 0.30;
+      for (const [cx, on, col, txt] of [[x + w * 0.05, o.lActive, colorA, 'L'], [x + w * 0.95, o.rActive, colorR, 'R']]) {
+        const cyy = y + h * 0.5, rr = h * 0.32;
         ctx.save();
-        if (on) { ctx.shadowColor = col; ctx.shadowBlur = 26; ctx.fillStyle = col; } else ctx.fillStyle = '#0a0e1a';
-        ctx.beginPath(); ctx.arc(cx, cyy, rr, 0, Math.PI * 2); ctx.fill();
-        ctx.lineWidth = 2; ctx.strokeStyle = on ? '#fff' : '#334'; ctx.stroke(); ctx.restore();
+        ctx.shadowColor = on ? col : 'transparent'; ctx.shadowBlur = on ? 26 : 0;
+        ctx.strokeStyle = on ? col : '#ffffff55'; ctx.lineWidth = on ? 5 : 3;
+        ctx.beginPath(); ctx.arc(cx, cyy, rr, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
         ctx.fillStyle = on ? '#fff' : '#8891b5'; ctx.font = `900 ${Math.round(h * 0.34)}px system-ui`;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(txt, cx, cyy);
       }
     }
     // 分數 + Combo（條上方）
     ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.7)}px system-ui`;
-    ctx.fillText(`${o.label} ${Math.round(o.score)}`, x + w * 0.5, y - h * 0.35);
+    ctx.fillStyle = o.color || '#fff'; ctx.font = `900 ${Math.round(h * 0.6)}px system-ui`;
+    ctx.fillText(`${o.label} ${Math.round(o.score)}`, x + w * 0.5, y - h * 0.28);
     if (o.comboMult > 1) {
-      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.6)}px system-ui`;
-      ctx.fillText(`🔥x${o.comboMult}`, x + w * 0.85, y - h * 0.35);
+      ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.52)}px system-ui`;
+      ctx.fillText(`🔥x${o.comboMult}`, x + w * 0.85, y - h * 0.28);
     }
   }
 
@@ -313,7 +303,7 @@ export function createUI(canvas) {
         const R = Math.min(W, H) * 0.26;
         if (state.segDir !== 'S') drawGuide({ x: W * 0.5, y: H * 0.42 }, R, state.segDir, gold);
         drawHand(state.handL, colorA); drawHand(state.handR, colorB);
-        drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.10, color: colorA,
+        drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle,
           frac: gFrac(state.score), score: state.score, comboMult: state.comboMult,
           label: 'YOU', showLR: true, lActive: state.lActive, rActive: state.rActive });
         if (state.comboMult > prevCombo.S) { triggerBurst(W * 0.5, H * 0.42, gold, state.comboMult); flash(colorA); }
@@ -323,9 +313,9 @@ export function createUI(canvas) {
         for (const [side, color, cx, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           if (state.segDir !== 'S') drawGuide({ x: cx * W, y: H * 0.42 }, R, state.segDir, color);
           drawHand(state[side].hand, color);
-          drawGauge({ x: gx * W, y: H * 0.85, w: W * 0.44, h: H * 0.09,
+          drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle,
             frac: gFrac(state[side].score), score: state[side].score, comboMult: state[side].comboMult,
-            label: side, color, showLR: false });
+            label: side, showLR: false });
           if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx * W, H * 0.42, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }

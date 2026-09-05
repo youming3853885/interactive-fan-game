@@ -213,6 +213,7 @@ async function loop(pose) {
         { ...fb, energy: Math.min(100, scoreS.score / SCORE_CFG.scoreForFullBar * 100) })).catch(() => {});
       const active = (om, hand) => segDir === 'S' ? !!hand : segDir === 'F' ? om > CONFIG.deadzone : om < -CONFIG.deadzone;
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
+        barStyle: settings.barStyle,
         score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG), handL, handR,
         lActive: active(omegaL, handL), rActive: active(omegaR, handR) });
       if (!ended && elapsed >= roundSec) {
@@ -228,6 +229,7 @@ async function loop(pose) {
         { ...fa, energy: Math.min(100, scoreA.score / SCORE_CFG.scoreForFullBar * 100) },
         { ...fb, energy: Math.min(100, scoreB.score / SCORE_CFG.scoreForFullBar * 100) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
+        barStyle: settings.barStyle,
         A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA },
         B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB } });
       if (!ended && elapsed >= roundSec) {

@@ -79,10 +79,33 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     return n;
   }
 
+  function barStylePicker() {
+    const wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex;gap:8px;';
+    const styles = [[1, '科技藍'], [2, '街機紅黃'], [3, '霓虹管']];
+    for (const [id, name] of styles) {
+      const b = document.createElement('button');
+      b.textContent = name;
+      const on = (settings.barStyle || 1) === id;
+      b.style.cssText = 'flex:1;padding:8px 6px;border-radius:8px;cursor:pointer;font-size:13px;' +
+        (on ? 'background:#2b7bff;color:#fff;border:1px solid #6ea8ff;' : 'background:#ffffff12;color:#cdd6ff;border:1px solid #fff3;');
+      b.addEventListener('click', () => { settings.barStyle = id; changed(); render(); });
+      wrap.append(b);
+    }
+    return wrap;
+  }
+
   function render() {
     body.replaceChildren();
     body.append(row('鏡頭透明度（越低越看得到MV）',
       slider(0, 100, settings.cameraOpacity, (v) => { settings.cameraOpacity = v; changed(); })));
+
+    const bs = document.createElement('div');
+    bs.style.cssText = 'margin:8px 0;';
+    const bsl = document.createElement('div');
+    bsl.textContent = '能量條風格'; bsl.style.cssText = 'margin-bottom:6px;';
+    bs.append(bsl, barStylePicker());
+    body.append(bs);
 
     const hr = document.createElement('hr');
     hr.style.cssText = 'border-color:#fff2;margin:10px 0;';

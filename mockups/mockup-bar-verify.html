@@ -1,0 +1,30 @@
+<!doctype html><html lang="zh-Hant"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>能量條填充驗證</title>
+<style>body{margin:0;background:#0a0b12;color:#e7ecff;font-family:system-ui,sans-serif}
+.wrap{max-width:920px;margin:0 auto;padding:20px}h1{text-align:center;font-size:20px}
+canvas{width:100%;aspect-ratio:16/9;display:block;border-radius:12px;border:1px solid #ffffff1a;background:#000;margin:14px 0}
+.t{font-weight:800;margin-top:14px}</style></head><body>
+<div class="wrap"><h1>三款能量條 · 動態填充對位驗證（55% 填充）</h1>
+<div class="t">版本1 科技藍</div><canvas id="c1"></canvas>
+<div class="t">版本2 街機紅黃</div><canvas id="c2"></canvas>
+<div class="t">版本3 霓虹管</div><canvas id="c3"></canvas></div>
+<script>
+const colorA='#2b7bff',colorR='#ff3b3b',gold='#ffd76b';
+const META={1:{chXL:0.10,chXR:0.90,chYT:0.331,chYB:0.620},2:{chXL:0.11,chXR:0.89,chYT:0.363,chYB:0.604},3:{chXL:0.10,chXR:0.90,chYT:0.324,chYB:0.658}};
+const imgs={};let loaded=0;
+for(const n of [1,2,3]){imgs[n]=new Image();imgs[n].src='assets/bar-'+n+'.png';imgs[n].onload=()=>{if(++loaded===3)draw();};}
+function rr(ctx,x,y,w,h,r){r=Math.min(r,w/2,h/2);ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function bg(ctx,W,H){const g=ctx.createLinearGradient(0,0,W,H);g.addColorStop(0,'#1a1030');g.addColorStop(.5,'#0a0b16');g.addColorStop(1,'#101a2e');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);ctx.fillStyle='#ffffff10';ctx.font=`900 ${H*0.26}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('DEJA VU',W/2,H*0.45);}
+function gauge(ctx,o){const{x,y,w,h}=o,frac=o.frac,meta=META[o.style],img=imgs[o.style];
+ ctx.drawImage(img,x,y,w,h);
+ const chXL=x+w*meta.chXL,chXR=x+w*meta.chXR,chY=y+h*meta.chYT,chH=h*(meta.chYB-meta.chYT),fillX=chXL+frac*(chXR-chXL);
+ ctx.save();ctx.globalAlpha=0.8;ctx.fillStyle='#02030a';ctx.fillRect(fillX,chY,chXR-fillX,chH);ctx.restore();
+ for(const[cx,on,col,txt]of[[x+w*0.05,true,colorA,'L'],[x+w*0.95,false,colorR,'R']]){const cyy=y+h*0.5,rr2=h*0.32;ctx.save();ctx.shadowColor=on?col:'transparent';ctx.shadowBlur=on?26:0;ctx.strokeStyle=on?col:'#ffffff55';ctx.lineWidth=on?5:3;ctx.beginPath();ctx.arc(cx,cyy,rr2,0,7);ctx.stroke();ctx.restore();ctx.fillStyle=on?'#fff':'#8891b5';ctx.font=`900 ${Math.round(h*0.34)}px system-ui`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(txt,cx,cyy);}
+ ctx.textAlign='center';ctx.textBaseline='alphabetic';ctx.fillStyle='#fff';ctx.font=`900 ${Math.round(h*0.6)}px system-ui`;ctx.fillText('YOU 1650',x+w*0.5,y-h*0.28);ctx.fillStyle=gold;ctx.font=`900 ${Math.round(h*0.52)}px system-ui`;ctx.fillText('🔥x3',x+w*0.85,y-h*0.28);}
+function one(id,style){const c=document.getElementById(id);c.width=c.clientWidth;c.height=c.clientWidth*9/16;const ctx=c.getContext('2d'),W=c.width,H=c.height;bg(ctx,W,H);
+ // 導引大圓
+ ctx.save();ctx.strokeStyle='#000000aa';ctx.lineWidth=14;ctx.beginPath();ctx.arc(W*0.5,H*0.42,Math.min(W,H)*0.26,0,7);ctx.stroke();ctx.shadowColor=gold;ctx.shadowBlur=20;ctx.strokeStyle=gold;ctx.lineWidth=7;ctx.setLineDash([16,14]);ctx.beginPath();ctx.arc(W*0.5,H*0.42,Math.min(W,H)*0.26,0,7);ctx.stroke();ctx.restore();
+ gauge(ctx,{x:W*0.09,y:H*0.80,w:W*0.82,h:H*0.12,frac:0.55,style});}
+function draw(){one('c1',1);one('c2',2);one('c3',3);}
+draw();
+</script></body></html>

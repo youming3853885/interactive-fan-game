@@ -10,7 +10,7 @@ export function defaultTrackSetting() {
 export function defaultSettings(trackIds) {
   const perTrack = {};
   for (const id of trackIds) perTrack[id] = defaultTrackSetting();
-  return { cameraOpacity: 60, perTrack };
+  return { cameraOpacity: 60, barStyle: 1, perTrack };
 }
 
 // 純函數：影片播放時間到了段尾要不要跳回起點。回傳要 seek 的時間，或 null（不動）。
@@ -26,7 +26,7 @@ export function loadSettings(trackIds) {
   try { saved = JSON.parse(localStorage.getItem(KEY)); } catch { saved = null; }
   if (!saved) return def;
   // 淺層合併，確保新歌/新欄位有預設值
-  const merged = { cameraOpacity: saved.cameraOpacity ?? def.cameraOpacity, perTrack: {} };
+  const merged = { cameraOpacity: saved.cameraOpacity ?? def.cameraOpacity, barStyle: saved.barStyle ?? def.barStyle, perTrack: {} };
   for (const id of trackIds) {
     merged.perTrack[id] = { ...defaultTrackSetting(), ...(saved.perTrack?.[id] || {}) };
   }
