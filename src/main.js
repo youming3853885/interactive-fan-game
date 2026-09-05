@@ -59,10 +59,11 @@ let lenMode = '2';
 let chart = [];
 let bpm = 120;
 let roundSec = 120;
+let maxScore = 1;
 let startTime = 0;
 // 每個玩家狀態：score 分數、combo 圈數、mult 上次倍率、mAng marker 角度、mAcc marker 累積(判斷整圈)、
 // oEMA 平滑角速度(判斷是否在轉)、active 是否在正確方向畫圈、oSum/oN 本圈平均轉速累計。
-const newScore = () => ({ score: 0, combo: 0, mult: 1, mAng: -Math.PI / 2, mAcc: 0, oEMA: 0, active: false, oSum: 0, oN: 0 });
+const newScore = () => ({ score: 0, combo: 0, mult: 1, mAng: -Math.PI / 2, mAcc: 0, spd: 0, oEMA: 0, active: false, oSum: 0, oN: 0 });
 let scoreA = newScore();
 let scoreB = newScore();
 let scoreS = newScore();
@@ -94,12 +95,21 @@ function startReady() {
   phase = 'ready';
 }
 
+// 本局理想最高分＝每圈都 PERFECT、combo 一路累積（能量條滿格＝達到此分）。
+function estimateMaxScore(sec, b) {
+  const ideal = (2 * Math.PI) / targetOmegaFor(b, SCORE_CFG);
+  const revs = Math.max(1, Math.floor(sec / ideal));
+  let s = 0; for (let i = 1; i <= revs; i++) s += revScore(i, 'PERFECT', SCORE_CFG);
+  return s || 1;
+}
+
 function startPlaying() {
   const t = media.tracks[selectedIdx];
   bpm = t.bpm || 120;
   const songLen = Number.isFinite(mvVideo.duration) ? mvVideo.duration : 120;
   roundSec = lenMode === '2' ? Math.min(120, songLen) : songLen;
   chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
+  maxScore = estimateMaxScore(roundSec, bpm); // 本局理想最高分 → 能量條滿格基準
   scoreA = newScore();
   scoreB = newScore();
   ended = false;
@@ -243,10 +253,13 @@ async function loop(pose) {
       if (segDir === 'S') st.active = false;
       else if (!st.active && correctSign && Math.abs(st.oEMA) > ON) st.active = true;
       else if (st.active && (!correctSign || Math.abs(st.oEMA) < OFF)) st.active = false;
-      if (st.active) {
-        st.mAng += dirSign * guideOmega * dt; // 勻速（＝目標轉速，好看）
-        st.mAcc += guideOmega * dt;
-        st.oSum += Math.abs(omega); st.oN += 1;
+      // 緩加/減速：active→速度平滑升到目標、放開→平滑降到 0，marker 不會硬啟停 → 更滑順
+      const targetSpd = st.active ? guideOmega : 0;
+      st.spd += (targetSpd - st.spd) * Math.min(1, dt * 8);
+      if (st.spd > 0.02) {
+        st.mAng += dirSign * st.spd * dt;
+        st.mAcc += st.spd * dt;
+        if (st.active) { st.oSum += Math.abs(omega); st.oN += 1; }
         if (st.mAcc >= 2 * Math.PI) {
           st.mAcc -= 2 * Math.PI;
           const avg = st.oN ? st.oSum / st.oN : 0; st.oSum = 0; st.oN = 0;
@@ -267,7 +280,7 @@ async function loop(pose) {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
       const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
       sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
-      ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
+      ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         markerAngle: m.markerAngle, active: m.active });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
@@ -276,7 +289,7 @@ async function loop(pose) {
       const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
       const fa = fanCommand(omegaA, CONFIG), fb = fanCommand(omegaB, CONFIG);
       sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
-      ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
+      ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore,
         barStyle: settings.barStyle,
         A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA.markerAngle, active: mA.active },
         B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB.markerAngle, active: mB.active } });

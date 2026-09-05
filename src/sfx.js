@@ -35,21 +35,46 @@ export const sfx = {
     const seq = win ? [523, 659, 784, 1047, 1319] : [523, 494, 440];
     seq.forEach((f, k) => setTimeout(() => blip(f, 0.2, 'triangle', 0.16), k * 120));
   },
-  // 勁舞團式語音判定：瀏覽器 TTS，挑較自然的英語嗓音 + 每次語調微變化，較活潑不死板。
+  // 語音判定：優先播 public/voice/{word}.wav（可換成自己錄的真人聲），沒有才退回 TTS。
   voice(text) {
-    try {
-      const s = window.speechSynthesis; if (!s) return;
-      const u = new SpeechSynthesisUtterance(text + '!');
-      const v = pickNaturalVoice(s);
-      if (v) u.voice = v;
-      u.lang = 'en-US';
-      u.rate = 1.02 + (Math.random() * 0.1 - 0.03);   // 微變速
-      u.pitch = 1.25 + (Math.random() * 0.3 - 0.12);  // 微變調（活潑）
-      u.volume = 1;
-      s.cancel(); s.speak(u);
-    } catch { /* 忽略 */ }
+    const key = String(text).toLowerCase();
+    const clip = voiceClips[key];
+    if (clip && clip.readyState >= 2) {
+      try {
+        const n = clip.cloneNode(); n.volume = 0.95;
+        n.playbackRate = 1.0 + (Math.random() * 0.12 - 0.04); // 微變速，較活
+        n.play().catch(() => ttsSpeak(text));
+        return;
+      } catch { /* 落到 TTS */ }
+    }
+    ttsSpeak(text);
   },
 };
+
+// 預載語音檔（放 public/voice/；缺檔就靜默退回 TTS）。
+const voiceClips = {};
+try {
+  const base = import.meta.env.BASE_URL;
+  for (const w of ['good', 'great', 'perfect', 'combo']) {
+    const a = new Audio(base + `voice/${w}.wav`);
+    a.preload = 'auto'; a.volume = 0.95;
+    voiceClips[w] = a;
+  }
+} catch { /* 忽略 */ }
+
+function ttsSpeak(text) {
+  try {
+    const s = window.speechSynthesis; if (!s) return;
+    const u = new SpeechSynthesisUtterance(text + '!');
+    const v = pickNaturalVoice(s);
+    if (v) u.voice = v;
+    u.lang = 'en-US';
+    u.rate = 1.02 + (Math.random() * 0.1 - 0.03);
+    u.pitch = 1.25 + (Math.random() * 0.3 - 0.12);
+    u.volume = 1;
+    s.cancel(); s.speak(u);
+  } catch { /* 忽略 */ }
+}
 
 let _naturalVoice;
 function pickNaturalVoice(s) {

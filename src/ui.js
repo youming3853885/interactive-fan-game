@@ -201,25 +201,48 @@ export function createUI(canvas) {
     drawDigit(x, y, dw, dh, digs[2], onC); x += dw + gap; drawDigit(x, y, dw, dh, digs[3], onC);
     ctx.restore();
   }
-  // 右上「下一個」小旋轉箭頭 + 秒數（不與其他元件重疊）
+  // 右上「下一個」預覽卡：玻璃圓底 + 發光環箭頭圖示 + 秒數，有設計感。
   function drawNextHint(dir, n) {
     if (!dir) return;
-    const W = canvas.width, H = canvas.height, x = W - H * 0.13, y = H * 0.11;
-    ctx.save(); ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#aeb8e0'; ctx.font = `${Math.round(H * 0.026)}px system-ui`; ctx.fillText('下一個', x, y - H * 0.06);
+    const W = canvas.width, H = canvas.height;
+    const cardW = H * 0.20, cardH = H * 0.24, cx = W - cardW / 2 - H * 0.03, top = H * 0.03;
+    const col = dir === 'S' ? '#9aa3c8' : dir === 'R' ? colorB : colorA;
+    ctx.save();
+    // 玻璃卡片
+    roundRectPath(cx - cardW / 2, top, cardW, cardH, H * 0.02);
+    ctx.fillStyle = '#0a0e1acc'; ctx.fill();
+    ctx.lineWidth = 2; ctx.strokeStyle = col + '88'; ctx.shadowColor = col; ctx.shadowBlur = 12; ctx.stroke();
+    ctx.shadowBlur = 0;
+    // 標籤
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#cdd6ff'; ctx.font = `700 ${Math.round(H * 0.026)}px system-ui`;
+    ctx.fillText('下一個', cx, top + cardH * 0.16);
+    // 圖示區
+    const iy = top + cardH * 0.52, r = H * 0.045;
     if (dir === 'S') {
-      ctx.fillStyle = '#aeb8e0'; ctx.font = `900 ${Math.round(H * 0.04)}px system-ui`; ctx.fillText('休息', x, y + H * 0.01);
+      // 休息＝暫停雙槓
+      ctx.fillStyle = col; ctx.shadowColor = col; ctx.shadowBlur = 14;
+      const bw = r * 0.34, bh = r * 1.2, g = r * 0.28;
+      roundRectPath(cx - g - bw, iy - bh / 2, bw, bh, bw * 0.4); ctx.fill();
+      roundRectPath(cx + g, iy - bh / 2, bw, bh, bw * 0.4); ctx.fill(); ctx.shadowBlur = 0;
     } else {
-      const sign = dir === 'R' ? -1 : 1, r = H * 0.032, col = dir === 'R' ? colorB : colorA;
-      const a0 = -Math.PI / 2, a1 = a0 + Math.PI * 1.4 * sign;
-      ctx.strokeStyle = col; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.shadowColor = col; ctx.shadowBlur = 12;
-      ctx.beginPath(); ctx.arc(x, y, r, a0, a1, sign < 0); ctx.stroke();
-      const tx = x + r * Math.cos(a1), ty = y + r * Math.sin(a1), tang = a1 + sign * Math.PI / 2, head = r * 0.7;
-      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang - sign * 0.6), ty - head * Math.sin(tang - sign * 0.6));
-      ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang + sign * 0.6), ty - head * Math.sin(tang + sign * 0.6)); ctx.stroke();
+      const sign = dir === 'R' ? -1 : 1;
+      // 深色襯底環
+      ctx.strokeStyle = '#00000088'; ctx.lineWidth = r * 0.42; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.arc(cx, iy, r, -Math.PI * 0.5, -Math.PI * 0.5 + Math.PI * 1.5 * sign, sign < 0); ctx.stroke();
+      // 彩色發光環
+      ctx.strokeStyle = col; ctx.lineWidth = r * 0.3; ctx.shadowColor = col; ctx.shadowBlur = 16;
+      const a1 = -Math.PI * 0.5 + Math.PI * 1.5 * sign;
+      ctx.beginPath(); ctx.arc(cx, iy, r, -Math.PI * 0.5, a1, sign < 0); ctx.stroke();
+      // 箭頭
+      const tx = cx + r * Math.cos(a1), ty = iy + r * Math.sin(a1), tang = a1 + sign * Math.PI / 2, head = r * 0.55;
+      ctx.beginPath(); ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang - sign * 0.5), ty - head * Math.sin(tang - sign * 0.5));
+      ctx.moveTo(tx, ty); ctx.lineTo(tx - head * Math.cos(tang + sign * 0.5), ty - head * Math.sin(tang + sign * 0.5)); ctx.stroke();
       ctx.shadowBlur = 0;
     }
-    ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`; ctx.fillText(String(Math.ceil(n)), x, y + H * 0.08);
+    // 秒數
+    ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.05)}px system-ui`;
+    ctx.fillText(String(Math.ceil(n)), cx, top + cardH * 0.86);
     ctx.restore();
   }
   // 能量條：codex 底圖(3款可選) + 未填滿處暗罩露出底圖=進度。
@@ -234,8 +257,32 @@ export function createUI(canvas) {
       const chXL = x + w * meta.chXL, chXR = x + w * meta.chXR;
       const chY = y + h * meta.chYT, chH = h * (meta.chYB - meta.chYT);
       const fillX = chXL + frac * (chXR - chXL);
-      ctx.save(); ctx.globalAlpha = 0.8; ctx.fillStyle = '#02030a';
+      // 未填滿處暗罩（帶微呼吸，像活的）
+      ctx.save(); ctx.globalAlpha = 0.82; ctx.fillStyle = '#02030a';
       ctx.fillRect(fillX, chY, chXR - fillX, chH); ctx.restore();
+      if (frac > 0.01) {
+        const col = o.color || '#5bd6ff';
+        // 已填區「呼吸」光暈
+        ctx.save(); ctx.globalCompositeOperation = 'lighter';
+        ctx.globalAlpha = 0.12 + 0.08 * Math.sin(guidePhase * 3);
+        ctx.fillStyle = col; ctx.fillRect(chXL, chY, fillX - chXL, chH); ctx.restore();
+        // 流動微光（左→右掃過已填區）
+        const sweepW = (chXR - chXL) * 0.18;
+        let sx = chXL + ((guidePhase * 60) % ((fillX - chXL) + sweepW)) - sweepW;
+        if (fillX - chXL > 4) {
+          const g = ctx.createLinearGradient(sx, 0, sx + sweepW, 0);
+          g.addColorStop(0, '#ffffff00'); g.addColorStop(0.5, '#ffffff55'); g.addColorStop(1, '#ffffff00');
+          ctx.save(); ctx.beginPath(); ctx.rect(chXL, chY, fillX - chXL, chH); ctx.clip();
+          ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = g; ctx.fillRect(sx, chY, sweepW, chH); ctx.restore();
+        }
+        // 填充前緣：脈動亮線 + 偶爾冒火花（彷彿在充能）
+        ctx.save(); ctx.shadowColor = col; ctx.shadowBlur = 18 + 10 * Math.sin(guidePhase * 5);
+        ctx.fillStyle = '#ffffffee'; ctx.fillRect(fillX - Math.max(2, h * 0.03), chY, Math.max(3, h * 0.06), chH);
+        ctx.restore();
+        if (Math.random() < 0.3) {
+          particles.push({ x: fillX, y: chY + Math.random() * chH, vx: (Math.random() - 0.5) * 1.5, vy: -1.5 - Math.random() * 2, life: 1, color: col, r: 1.5 + Math.random() * 2.5 });
+        }
+      }
     } else { // 底圖未載入的退路：簡單實心條
       ctx.save(); roundRectPath(x, y, w, h, h * 0.5); ctx.fillStyle = '#0a0e1ad9'; ctx.fill();
       ctx.fillStyle = o.color || '#5bd6ff'; ctx.fillRect(x + h * 0.2, y + h * 0.3, (w - h * 0.4) * frac, h * 0.4); ctx.restore();
@@ -464,7 +511,7 @@ export function createUI(canvas) {
       drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
-      const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
+      const gFrac = (s) => Math.max(0, Math.min(1, s / (state.maxScore || 3000)));
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
       drawComboAura(maxMult); // combo 等級 → 全畫面光環升級
       if (state.mode === 'single') {
