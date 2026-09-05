@@ -144,23 +144,26 @@ export function createUI(canvas) {
     ctx.fillText('🖐', pt.x, pt.y);
   }
 
-  // 最上層：畫圓運動導引。虛線圓 = 要畫的軌跡；亮點沿圓移動 = 該畫的方向。
+  // 最上層：畫圓運動導引。虛線沿方向流動 + 彗尾 + 亮點，明確指出要畫的方向與速度。
   function drawGuide(center, radius, dir, color) {
-    ctx.save();
-    // 1) 深色襯底環（實線、較粗）→ 不論 MV 多花都看得到圈
-    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = 14;
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
-    // 2) 彩色虛線圈 + 發光疊在上面
-    ctx.shadowColor = color; ctx.shadowBlur = 20;
-    ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.setLineDash([16, 14]);
-    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-    // 3) 沿圈移動的方向亮點（大顆 + 深色描邊 + 發光）
     const sign = dir === 'R' ? -1 : 1; // F 順時針、R 逆時針
     const ang = guidePhase * sign;
+    ctx.save();
+    // 1) 深色襯底環（不論 MV 多花都看得到）
+    ctx.strokeStyle = '#000000aa'; ctx.lineWidth = 16;
+    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
+    // 2) 彩色虛線圈，dash 沿方向流動 → 整圈像在轉
+    ctx.shadowColor = color; ctx.shadowBlur = 18;
+    ctx.strokeStyle = color; ctx.lineWidth = 7; ctx.setLineDash([18, 16]);
+    ctx.lineDashOffset = -sign * guidePhase * radius;
+    ctx.beginPath(); ctx.arc(center.x, center.y, radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]); ctx.lineDashOffset = 0;
+    // 3) 彗尾亮弧（在亮點後方拖尾，強化方向感）
+    ctx.lineWidth = 10; ctx.shadowBlur = 26;
+    ctx.beginPath(); ctx.arc(center.x, center.y, radius, ang - sign * 0.9, ang, sign < 0); ctx.stroke();
+    // 4) 方向亮點（大顆 + 深色描邊 + 發光）
     const mx = center.x + radius * Math.cos(ang), my = center.y + radius * Math.sin(ang);
-    ctx.shadowBlur = 26;
-    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.032, 0, Math.PI * 2);
+    ctx.beginPath(); ctx.arc(mx, my, canvas.height * 0.034, 0, Math.PI * 2);
     ctx.fillStyle = color; ctx.fill();
     ctx.shadowBlur = 0; ctx.strokeStyle = '#000'; ctx.lineWidth = 3; ctx.stroke();
     ctx.restore();
@@ -308,6 +311,8 @@ export function createUI(canvas) {
     render(state) {
       const W = canvas.width, H = canvas.height;
       ctx.clearRect(0, 0, W, H);
+      // 遊玩區把 MV 壓暗（半透明黑遮罩）→ 導引圓/能量條看得超清楚
+      ctx.fillStyle = 'rgba(4,5,12,0.62)'; ctx.fillRect(0, 0, W, H);
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
       drawSchool();
       const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '休息';
@@ -317,7 +322,8 @@ export function createUI(canvas) {
         centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
       }
       centerText(`剩餘 ${Math.ceil(state.timeLeft)} 秒`, 0.05, 0.03, '#fff');
-      guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
+      const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
+      guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
       if (state.mode === 'single') {
         // 單一大導引圓（雙手共用）
