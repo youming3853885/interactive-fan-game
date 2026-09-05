@@ -38,7 +38,7 @@ export function createSelectScreen(hud, onPick) {
       </div>
     </div>
     <div class="ss-controls">
-      <button class="ss-btn ss-preview" id="ssPreview">▶ 試聽</button>
+      <button class="ss-btn ss-preview" id="ssPreview">試聽</button>
       <button class="ss-btn ss-start" id="ssStart">開始遊戲</button>
     </div>
     <div class="ss-dots" id="ssDots"></div>`;
@@ -90,10 +90,10 @@ export function createSelectScreen(hud, onPick) {
   function showDuration() {
     const t = tracks[i];
     const d = durCache[t.id];
-    $('ssDur').textContent = `🕒 時長 ${formatTime(d)}`;
+    $('ssDur').textContent = `時長 ${formatTime(d)}`;
     if (d === undefined) {
       durProbe.src = t.src;
-      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t) $('ssDur').textContent = `🕒 時長 ${formatTime(durProbe.duration)}`; };
+      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t) $('ssDur').textContent = `時長 ${formatTime(durProbe.duration)}`; };
     }
   }
 
@@ -106,7 +106,7 @@ export function createSelectScreen(hud, onPick) {
     $('ssTitle').textContent = t.name;
     $('ssSub').textContent = t.sub || '';
     $('ssIdx').textContent = `${i + 1} / ${tracks.length}`;
-    $('ssBpm').textContent = t.bpm ? `♪ ${t.bpm} BPM` : '';
+    $('ssBpm').textContent = t.bpm ? `${t.bpm} BPM` : '';
     const stars = bpmToStars(t.bpm);
     $('ssStars').textContent = stars ? `難度 ${starString(stars)}` : '';
     $('ssDots').innerHTML = tracks.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
@@ -130,7 +130,7 @@ export function createSelectScreen(hud, onPick) {
     preview.pause();
     $('ssDisc').classList.remove('playing');
     $('ssWrap').classList.remove('playing');
-    $('ssPreview').textContent = '▶ 試聽';
+    $('ssPreview').textContent = '試聽';
     lights.setPlaying(false);
   }
 
@@ -152,7 +152,7 @@ export function createSelectScreen(hud, onPick) {
     sfx.toggle(playing);
     $('ssDisc').classList.toggle('playing', playing);
     $('ssWrap').classList.toggle('playing', playing);
-    $('ssPreview').textContent = playing ? '⏸ 停止試聽' : '▶ 試聽';
+    $('ssPreview').textContent = playing ? '停止試聽' : '試聽';
     if (playing) startPreview(); else preview.pause();
   });
   $('ssStart').addEventListener('mouseenter', () => sfx.hover());
@@ -226,9 +226,16 @@ function injectStyle() {
   .ss-preview:hover{background:#ffffff22;}
   .ss-start{background:linear-gradient(135deg,#4ec3ff,#ff6b9d);color:#0b0b12;font-size:18px;padding:14px 40px;box-shadow:0 8px 30px #ff6b9d55;}
   .ss-start:hover{filter:brightness(1.08);transform:translateY(-1px);}
-  .ss-chev{width:64px;height:64px;border-radius:50%;border:1px solid #ffffff33;background:#ffffff0d;color:#fff;
-    font-size:30px;cursor:pointer;flex:0 0 auto;transition:.15s;backdrop-filter:blur(4px);}
-  .ss-chev:hover{background:#4ec3ff;color:#0b0b12;transform:scale(1.08);box-shadow:0 0 24px #4ec3ff88;}
+  .ss-chev{position:relative;width:72px;height:72px;border-radius:50%;border:2px solid #6ea8ff;background:#0e1430cc;color:#fff;
+    font-size:32px;font-weight:900;cursor:pointer;flex:0 0 auto;transition:.15s;backdrop-filter:blur(4px);
+    box-shadow:0 0 16px #4ec3ff66;animation:chevPulse 1.6s ease-in-out infinite;}
+  .ss-chev::before{content:"";position:absolute;inset:-6px;border-radius:50%;padding:3px;pointer-events:none;
+    background:conic-gradient(from 0deg,#4ec3ff,#a06bff,#ff6bd0,#4ec3ff);
+    -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+    -webkit-mask-composite:xor;mask-composite:exclude;animation:chevSpin 3s linear infinite;}
+  @keyframes chevSpin{to{transform:rotate(360deg)}}
+  @keyframes chevPulse{0%,100%{box-shadow:0 0 16px #4ec3ff66}50%{box-shadow:0 0 32px #7aa8ffcc,0 0 52px #a06bff55}}
+  .ss-chev:hover{background:#4ec3ff;color:#0b0b12;transform:scale(1.1);box-shadow:0 0 34px #4ec3ffcc;}
   .ss-dots{margin-top:22px;display:flex;gap:10px;}
   .ss-dots i{width:9px;height:9px;border-radius:50%;background:#ffffff33;}
   .ss-dots i.on{background:#ffd76b;box-shadow:0 0 12px #ffd76b;}

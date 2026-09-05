@@ -4,7 +4,7 @@ import { saveSettings, defaultTrackSetting } from './settings.js';
 // 任何變更即時套用(media.applySettings)並存 localStorage。
 export function createSettingsPanel(hud, settings, media, arduino) {
   const gear = document.createElement('button');
-  gear.textContent = '⚙ 設定';
+  gear.textContent = '設定';
   gear.style.cssText =
     'position:absolute;top:10px;right:12px;z-index:6;background:#222b;color:#fff;border:1px solid #fff5;' +
     'border-radius:8px;padding:8px 14px;cursor:pointer;font-size:15px;';

@@ -16,7 +16,7 @@ export function createUI(canvas) {
   for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.png`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
-  const SCHOOL = '🏫 澎湖縣湖西鄉龍門國民小學 · 畫圈對決';
+  const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
   const bursts = [];
   let prevCombo = { A: 1, B: 1, S: 1 };
   function drawSchool() {
@@ -92,7 +92,7 @@ export function createUI(canvas) {
     ctx.fillText(`${o.label} ${Math.round(o.score)}`, x + w * 0.5, y - h * 0.28);
     if (o.comboMult > 1) {
       ctx.fillStyle = gold; ctx.font = `900 ${Math.round(h * 0.52)}px system-ui`;
-      ctx.fillText(`🔥x${o.comboMult}`, x + w * 0.85, y - h * 0.28);
+      ctx.fillText(`COMBO x${o.comboMult}`, x + w * 0.82, y - h * 0.28);
     }
   }
 
@@ -138,10 +138,10 @@ export function createUI(canvas) {
     ctx.fillStyle = '#00000066'; ctx.fill();
     ctx.shadowColor = color; ctx.shadowBlur = 24;
     ctx.strokeStyle = color; ctx.lineWidth = 6; ctx.stroke();
+    // 中央實心亮點（取代手掌 emoji）
+    ctx.beginPath(); ctx.arc(pt.x, pt.y, H * 0.026, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = 18; ctx.fill();
     ctx.restore();
-    ctx.font = `${Math.round(H * 0.10)}px system-ui`;
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText('🖐', pt.x, pt.y);
   }
 
   // 最上層：畫圓運動導引。虛線圓 = 要畫的軌跡；亮點沿圓移動 = 該畫的方向。
@@ -188,7 +188,7 @@ export function createUI(canvas) {
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const cx = side === 'A' ? W * 0.25 : W * 0.75;
       if (!s.hand) {
-        ctx.fillText('👋 揮手讓鏡頭看到你', cx, H * 0.4);
+        ctx.fillText('揮手讓鏡頭看到你', cx, H * 0.4);
       } else {
         // 方塊：固定側色（左藍右紅），不變色
         ctx.strokeStyle = color; ctx.lineWidth = 6;
@@ -252,7 +252,7 @@ export function createUI(canvas) {
       ctx.restore();
       ctx.fillStyle = on ? color : '#ffffffaa'; ctx.font = `bold ${Math.round(H * 0.026)}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(on ? '✓ ' + label : '👋 ' + label, hx, handY + H * 0.085);
+      ctx.fillText(on ? '已偵測 ' + label : '舉起 ' + label, hx, handY + H * 0.085);
     }
 
     // 雙手都到 → 大倒數（軀幹中央）
@@ -260,11 +260,18 @@ export function createUI(canvas) {
     const remain = Math.max(0, Math.ceil(state.need - state.hold));
     const label = state.ready ? 'GO!' : (bothOn ? String(remain) : '');
     if (label) {
-      ctx.fillStyle = '#fff'; ctx.strokeStyle = '#ffd76b'; ctx.lineWidth = 6;
-      ctx.font = `bold ${Math.round(H * 0.16)}px system-ui`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       const my = (shoulderY + hipY) / 2;
-      ctx.strokeText(label, cx, my); ctx.fillText(label, cx, my);
+      const big = state.ready ? H * 0.22 : H * 0.30; // 數字比 GO! 更大
+      // 深色圓底 + 環，讓數字在花俏 MV 上超清楚
+      ctx.save();
+      ctx.beginPath(); ctx.arc(cx, my, big * 0.72, 0, Math.PI * 2);
+      ctx.fillStyle = '#05070fcc'; ctx.fill();
+      ctx.lineWidth = 8; ctx.strokeStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 30; ctx.stroke();
+      ctx.restore();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `900 ${Math.round(big)}px system-ui`;
+      ctx.lineWidth = 10; ctx.strokeStyle = '#05070f'; ctx.strokeText(label, cx, my);
+      ctx.fillStyle = '#fff'; ctx.fillText(label, cx, my);
     }
 
     // 實際手部亮點
@@ -289,13 +296,13 @@ export function createUI(canvas) {
       ctx.clearRect(0, 0, W, H);
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
       drawSchool();
-      const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '⏸ 休息';
+      const glyph = state.segDir === 'F' ? '↻ 正轉' : state.segDir === 'R' ? '↺ 反轉' : '休息';
       centerText(glyph, 0.12, 0.08, '#fff');
       if (state.nextDir) {
         const nn = state.nextDir === 'F' ? '正轉' : state.nextDir === 'R' ? '反轉' : '休息';
         centerText(`下一個：${nn}  ${Math.ceil(state.nextIn)}`, 0.22, 0.03, '#cdd6ff');
       }
-      centerText(`⏱ ${Math.ceil(state.timeLeft)}s`, 0.05, 0.03, '#fff');
+      centerText(`剩餘 ${Math.ceil(state.timeLeft)} 秒`, 0.05, 0.03, '#fff');
       guidePhase = (guidePhase + (state.guideOmega || 0) / 60) % (Math.PI * 2);
       const gFrac = (s) => Math.max(0, Math.min(1, s / 3000));
       if (state.mode === 'single') {

@@ -6,7 +6,7 @@ export function createLoadingScreen(hud) {
   el.innerHTML = `
     <div class="ld-glow"></div>
     <div class="ld-disc"><div class="ld-hole"></div></div>
-    <div class="ld-title" style="font-size:26px;letter-spacing:.06em">澎湖縣湖西鄉龍門國民小學</div>
+    <div class="ld-title" style="font-size:26px;letter-spacing:.06em">澎湖縣龍門國小</div>
     <div class="ld-title">畫 圈 對 決</div>
     <div class="ld-status" id="ldStatus">載入音樂中…</div>
     <div class="ld-barwrap"><div class="ld-bar" id="ldBar"></div></div>

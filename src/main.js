@@ -50,6 +50,7 @@ const READY_NEED = 5;
 let phase = 'loading';
 let mode = 'dual';
 let media = null;
+let settings = null;
 let selectScreen = null;
 let selectedIdx = 0;
 let lenMode = '2';
@@ -121,7 +122,7 @@ async function boot() {
   const pose = await createPoseReader(video);
 
   // 設定（並套用內建預設起播秒數，如超跑情人夢第 5 秒）
-  const settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
+  settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
   for (const t of BUILTIN_TRACKS) {
     const ps = settings.perTrack[t.id];
     if (t.start && ps && ps.start === 0) ps.start = t.start;
