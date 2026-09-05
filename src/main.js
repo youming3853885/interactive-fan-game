@@ -1,7 +1,7 @@
 import { wristAngle, trackRotation } from './motion.js';
 import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
-import { SCORE_CFG, revStep, judgeRev, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars } from './tracks.js';
 import { formatCommand } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
@@ -60,8 +60,9 @@ let chart = [];
 let bpm = 120;
 let roundSec = 120;
 let startTime = 0;
-// 每個玩家：score 總分、combo 連續圈數、acc 已累積角度、t0 本圈起始時間、mult 上次倍率
-const newScore = () => ({ score: 0, combo: 0, acc: 0, t0: 0, mult: 1 });
+// 每個玩家狀態：score 分數、combo 圈數、mult 上次倍率、mAng marker 角度、mAcc marker 累積(判斷整圈)、
+// oEMA 平滑角速度(判斷是否在轉)、active 是否在正確方向畫圈、oSum/oN 本圈平均轉速累計。
+const newScore = () => ({ score: 0, combo: 0, mult: 1, mAng: -Math.PI / 2, mAcc: 0, oEMA: 0, active: false, oSum: 0, oN: 0 });
 let scoreA = newScore();
 let scoreB = newScore();
 let scoreS = newScore();
@@ -172,6 +173,16 @@ function toCanvasFull(pt) {
   return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
 }
 
+// 在「螢幕座標(鏡像後)」算角速度 → 正轉F=螢幕順時針恆對應 omega>0，左右一致。
+// 若實機發現方向相反，把 DIR_SIGN 改成 -1 即可整體翻轉。
+const DIR_SIGN = 1;
+function omegaScreen(rot, wrist, shoulder, mapFn, dt) {
+  const a = wristAngle(mapFn(wrist), mapFn(shoulder));
+  const r = trackRotation(rot, a, dt);
+  rot.lastAngle = r.state.lastAngle;
+  return DIR_SIGN * r.omega;
+}
+
 async function loop(pose) {
   const now = performance.now();
   const dt = Math.min((now - last) / 1000, 0.1);
@@ -182,14 +193,14 @@ async function loop(pose) {
   if (phase !== 'select') {
     if (mode === 'single') {
       const arm = pickArm(await pose.readFull());
-      if (arm) { const ang = wristAngle(arm.wrist, arm.shoulder); const r = trackRotation(rotS, ang, dt); rotS.lastAngle = r.state.lastAngle; omegaS = r.omega; handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
+      if (arm) { omegaS = omegaScreen(rotS, arm.wrist, arm.shoulder, toCanvasFull, dt); handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
       handS = smoothPoint(smS, handS, SMOOTH);
     } else {
       // 左右半邊各自偵測 → 保證每邊各抓到一位玩家（螢幕左=A、右=B）。
       const armA = pickArm(await pose.readHalf('A'));
       const armB = pickArm(await pose.readHalf('B'));
-      if (armA) { const ang = wristAngle(armA.wrist, armA.shoulder); const r = trackRotation(rotA, ang, dt); rotA.lastAngle = r.state.lastAngle; omegaA = r.omega; handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
-      if (armB) { const ang = wristAngle(armB.wrist, armB.shoulder); const r = trackRotation(rotB, ang, dt); rotB.lastAngle = r.state.lastAngle; omegaB = r.omega; handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
+      if (armA) { omegaA = omegaScreen(rotA, armA.wrist, armA.shoulder, (p) => toCanvas(p, 'A'), dt); handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
+      if (armB) { omegaB = omegaScreen(rotB, armB.wrist, armB.shoulder, (p) => toCanvas(p, 'B'), dt); handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
       handA = smoothPoint(smA, handA, SMOOTH); handB = smoothPoint(smB, handB, SMOOTH);
     }
   }
@@ -217,38 +228,48 @@ async function loop(pose) {
     const { current, next, remain } = segmentAt(chart, elapsed);
     const segDir = current ? current.dir : 'S';
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
-    const sign = segDir === 'R' ? -1 : 1;
+    const dirSign = segDir === 'R' ? -1 : 1;
     const energyOf = (om) => Math.min(100, Math.abs(om) / (guideOmega * 1.5) * 100);
-    const activeOf = (om) => segDir !== 'S' && Math.abs(om) > CONFIG.deadzone &&
-      ((segDir === 'F' && om > 0) || (segDir === 'R' && om < 0));
     const endRound = (result, win) => {
       ended = true; phase = 'victory'; victoryResult = result; sendStop(); mvVideo.pause(); sfx.fanfare(win);
       setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 6000);
     };
-    // 處理一位玩家的整圈偵測 → 完成一圈就加分/判定/combo/特效音效。回傳 marker 角度。
+    // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
+    // marker 每跑滿一圈=完成一圈 → 用該圈平均轉速判定 PERFECT/GREAT/GOOD、加分/combo/特效音效。
+    const ON = 1.2, OFF = 0.5; // 遲滯門檻（rad/s）
     const stepPlayer = (st, omega, cx, cy, color) => {
-      const r = revStep(st.acc, omega, segDir, dt, SCORE_CFG); st.acc = r.acc;
-      if (r.completed) {
-        const revTime = elapsed - st.t0; st.t0 = elapsed;
-        const j = judgeRev(revTime, bpm, SCORE_CFG);
-        st.combo += 1;
-        const pts = revScore(st.combo, j, SCORE_CFG); st.score += pts;
-        const mult = comboMultiplier(st.combo, SCORE_CFG);
-        const leveled = mult > st.mult; st.mult = mult;
-        ui.judge(j, pts, mult, cx, cy, color);
-        sfx.hit(mult >= 3);
-        if (leveled) { sfx.comboBurst(mult); sfx.voice('Combo'); }
-        else sfx.voice(j === 'PERFECT' ? 'Perfect' : j === 'GREAT' ? 'Great' : 'Good');
+      st.oEMA += 0.3 * (omega - st.oEMA);
+      const correctSign = dirSign > 0 ? st.oEMA > 0 : st.oEMA < 0;
+      if (segDir === 'S') st.active = false;
+      else if (!st.active && correctSign && Math.abs(st.oEMA) > ON) st.active = true;
+      else if (st.active && (!correctSign || Math.abs(st.oEMA) < OFF)) st.active = false;
+      if (st.active) {
+        st.mAng += dirSign * guideOmega * dt; // 勻速（＝目標轉速，好看）
+        st.mAcc += guideOmega * dt;
+        st.oSum += Math.abs(omega); st.oN += 1;
+        if (st.mAcc >= 2 * Math.PI) {
+          st.mAcc -= 2 * Math.PI;
+          const avg = st.oN ? st.oSum / st.oN : 0; st.oSum = 0; st.oN = 0;
+          const j = judgeBySpeed(avg, bpm, SCORE_CFG);
+          st.combo += 1;
+          const pts = revScore(st.combo, j, SCORE_CFG); st.score += pts;
+          const mult = comboMultiplier(st.combo, SCORE_CFG);
+          const leveled = mult > st.mult; st.mult = mult;
+          ui.judge(j, pts, mult, cx, cy, color);
+          sfx.hit(mult >= 3);
+          if (leveled) { sfx.comboBurst(mult); sfx.voice('Combo'); }
+          else sfx.voice(j === 'PERFECT' ? 'Perfect' : j === 'GREAT' ? 'Great' : 'Good');
+        }
       }
-      return -Math.PI / 2 + sign * st.acc; // marker 沿圈位置
+      return { markerAngle: st.mAng, active: st.active };
     };
     if (mode === 'single') {
-      const markerAngle = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
+      const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
       const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
       sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle, score: scoreS.score, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
-        markerAngle, active: activeOf(omegaS) });
+        markerAngle: m.markerAngle, active: m.active });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
@@ -257,8 +278,8 @@ async function loop(pose) {
       sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega,
         barStyle: settings.barStyle,
-        A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA, active: activeOf(omegaA) },
-        B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB, active: activeOf(omegaB) } });
+        A: { score: scoreA.score, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), markerAngle: mA.markerAngle, active: mA.active },
+        B: { score: scoreB.score, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), markerAngle: mB.markerAngle, active: mB.active } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);

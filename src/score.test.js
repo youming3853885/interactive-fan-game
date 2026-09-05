@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SCORE_CFG, targetOmegaFor, comboMultiplier, revStep, judgeRev, revScore, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, targetOmegaFor, comboMultiplier, judgeBySpeed, revScore, higherScore, gradeFor } from './score.js';
 
 describe('targetOmegaFor', () => {
   it('每2拍一圈：120BPM → 2π rad/s', () => {
@@ -15,39 +15,17 @@ describe('comboMultiplier', () => {
   });
 });
 
-describe('revStep', () => {
-  const T = 2 * Math.PI;
-  it('方向對 → 累積角度', () => {
-    const r = revStep(0, T, 'F', 0.1, SCORE_CFG); // 2π rad/s * 0.1 = 0.628
-    expect(r.completed).toBe(0);
-    expect(r.acc).toBeCloseTo(0.628, 2);
+describe('judgeBySpeed', () => {
+  const T = targetOmegaFor(120, SCORE_CFG);
+  it('接近或超過目標轉速 → PERFECT', () => {
+    expect(judgeBySpeed(T, 120, SCORE_CFG)).toBe('PERFECT');
+    expect(judgeBySpeed(T * 1.5, 120, SCORE_CFG)).toBe('PERFECT');
   });
-  it('累積跨過 2π → completed=1，acc 進位', () => {
-    const r = revStep(2 * Math.PI - 0.3, 6.283, 'F', 0.1, SCORE_CFG);
-    expect(r.completed).toBe(1);
-    expect(r.acc).toBeGreaterThanOrEqual(0);
-    expect(r.acc).toBeLessThan(2 * Math.PI);
-  });
-  it('方向錯 → 暫停，保留 acc、不完成', () => {
-    expect(revStep(1.0, -6, 'F', 0.1, SCORE_CFG)).toEqual({ acc: 1.0, completed: 0 });
-  });
-  it('休息段 → 保留 acc', () => {
-    expect(revStep(1.0, 6, 'S', 0.1, SCORE_CFG)).toEqual({ acc: 1.0, completed: 0 });
-  });
-});
-
-describe('judgeRev', () => {
-  it('接近理想耗時 → PERFECT', () => {
-    const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
-    expect(judgeRev(ideal, 120, SCORE_CFG)).toBe('PERFECT');
-  });
-  it('偏離一些 → GREAT', () => {
-    const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
-    expect(judgeRev(ideal * 2, 120, SCORE_CFG)).toBe('GREAT');
+  it('偏慢一些 → GREAT', () => {
+    expect(judgeBySpeed(T * 0.5, 120, SCORE_CFG)).toBe('GREAT');
   });
   it('太慢 → GOOD', () => {
-    const ideal = (2 * Math.PI) / targetOmegaFor(120, SCORE_CFG);
-    expect(judgeRev(ideal * 3, 120, SCORE_CFG)).toBe('GOOD');
+    expect(judgeBySpeed(T * 0.2, 120, SCORE_CFG)).toBe('GOOD');
   });
 });
 
