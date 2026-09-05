@@ -136,7 +136,8 @@ async function boot() {
 // 把 pose 座標（半張畫面像素）換算成 overlay canvas 像素（含左右鏡像）。
 function toCanvas(pt, side) {
   const halfW = video.videoWidth / 2;
-  const xInFull = (side === 'A' ? 0 : halfW) + pt.x;
+  // 對應 pose.js 的半邊對調：A=原始右半、B=原始左半
+  const xInFull = (side === 'A' ? halfW : 0) + pt.x;
   const fx = video.videoWidth - xInFull; // CSS scaleX(-1) 鏡像
   return { x: (fx / video.videoWidth) * canvas.width, y: (pt.y / video.videoHeight) * canvas.height };
 }

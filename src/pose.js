@@ -20,7 +20,8 @@ export async function createPoseReader(video) {
     const w = video.videoWidth, h = video.videoHeight;
     if (!w || !h) return null;
     half.width = w / 2; half.height = h;
-    const sx = side === 'A' ? 0 : w / 2;
+    // 畫面鏡像顯示：A=螢幕左=原始右半、B=螢幕右=原始左半
+    const sx = side === 'A' ? w / 2 : 0;
     hctx.drawImage(video, sx, 0, w / 2, h, 0, 0, w / 2, h);
     const poses = await det.estimatePoses(half);
     if (!poses.length) return null;
