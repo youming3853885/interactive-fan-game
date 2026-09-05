@@ -5,13 +5,21 @@ import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
 import { createUI } from './ui.js';
 import { createMusicWidget } from './music.js';
+import { BUILTIN_TRACKS } from './tracks.js';
+import { loadSettings } from './settings.js';
+import { createSettingsPanel } from './settings-panel.js';
 
 const video = document.getElementById('cam');
+const mvVideo = document.getElementById('mv');
 const canvas = document.getElementById('overlay');
 const hud = document.getElementById('hud');
 
 const ui = createUI(canvas);
-createMusicWidget(hud);
+
+// 背景 MV + 設定
+const settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
+const media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
+createSettingsPanel(hud, settings, media);
 
 // ---- 頂部工具列：連接 Arduino / sim 狀態 ----
 const bar = document.createElement('div');

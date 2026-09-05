@@ -1,57 +1,98 @@
-// 底部一角的旋轉唱盤：點一下播放/暫停+換曲，右邊可上傳 MP3。
-// 佔位曲目先留空清單，使用者上傳後加入。純氣氛，與遊戲邏輯無耦合。
-export function createMusicWidget(hud) {
-  const tracks = []; // { name, url }
-  let idx = 0;
-  const audio = new Audio();
-  audio.loop = true;
+import { loopSeekTime, defaultTrackSetting } from './settings.js';
 
+// 控制背景 MV <video>：內建曲目 + 上傳，套用每首歌的 開始/停止/音量/透明度，
+// 底部旋轉唱盤點一下播放/暫停，播放中再點換下一首。
+export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTracks) {
+  const tracks = [...builtinTracks]; // { id, name, src }
+  let idx = 0;
+
+  function trackSetting(t) {
+    return settings.perTrack[t.id] || (settings.perTrack[t.id] = defaultTrackSetting());
+  }
+
+  function applyCameraOpacity() {
+    cameraEl.style.opacity = String(settings.cameraOpacity / 100);
+  }
+
+  function loadTrack(i, autoplay) {
+    idx = i;
+    const t = tracks[idx];
+    const cfg = trackSetting(t);
+    videoEl.src = t.src;
+    videoEl.volume = cfg.volume / 100;
+    videoEl.style.opacity = String(cfg.mvOpacity / 100);
+    label.textContent = `♪ ${t.name}`;
+    videoEl.currentTime = cfg.start || 0;
+    if (autoplay) videoEl.play().catch(() => {});
+  }
+
+  // 段尾跳回段首（每首歌可設 start/end 剪出片段循環）
+  videoEl.addEventListener('timeupdate', () => {
+    const cfg = trackSetting(tracks[idx]);
+    const seek = loopSeekTime(videoEl.currentTime, cfg.start || 0, cfg.end || 0);
+    if (seek !== null) videoEl.currentTime = seek;
+  });
+
+  // ---- 唱盤 UI ----
   const wrap = document.createElement('div');
   wrap.style.cssText =
     'position:absolute;left:16px;bottom:16px;display:flex;align-items:center;gap:10px;color:#fff;';
 
   const disc = document.createElement('div');
   disc.textContent = '💿';
-  disc.title = '點一下播放/暫停・切換曲目';
-  disc.style.cssText =
-    'font-size:48px;cursor:pointer;transition:transform .1s linear;user-select:none;';
+  disc.title = '點一下播放/暫停・播放中再點換下一首';
+  disc.style.cssText = 'font-size:48px;cursor:pointer;user-select:none;';
   let spin = 0;
   function tick() {
-    if (!audio.paused) { spin = (spin + 6) % 360; disc.style.transform = `rotate(${spin}deg)`; }
+    if (!videoEl.paused && !videoEl.ended) {
+      spin = (spin + 4) % 360;
+      disc.style.transform = `rotate(${spin}deg)`;
+    }
     requestAnimationFrame(tick);
   }
   tick();
 
   const label = document.createElement('span');
-  label.textContent = '（無曲目，請上傳 MP3）';
 
   disc.addEventListener('click', () => {
     if (!tracks.length) return;
-    if (audio.paused) { audio.play(); }
-    else {
-      // 暫停時再點 → 換下一首
-      idx = (idx + 1) % tracks.length;
-      loadTrack();
-      audio.play();
+    if (videoEl.paused) {
+      if (!videoEl.src) loadTrack(0, true);
+      else videoEl.play().catch(() => {});
+    } else {
+      loadTrack((idx + 1) % tracks.length, true); // 換下一首
     }
   });
-  disc.addEventListener('dblclick', () => audio.pause());
-
-  function loadTrack() {
-    audio.src = tracks[idx].url;
-    label.textContent = `♪ ${tracks[idx].name}`;
-  }
+  disc.addEventListener('dblclick', () => videoEl.pause());
 
   const upload = document.createElement('input');
   upload.type = 'file';
-  upload.accept = 'audio/*';
+  upload.accept = 'video/*,audio/*';
   upload.multiple = true;
   upload.style.color = '#fff';
   upload.addEventListener('change', () => {
-    for (const f of upload.files) tracks.push({ name: f.name, url: URL.createObjectURL(f) });
-    if (tracks.length && !audio.src) { idx = 0; loadTrack(); }
+    for (const f of upload.files) {
+      const id = `upload-${f.name}`;
+      tracks.push({ id, name: f.name, src: URL.createObjectURL(f) });
+      if (!settings.perTrack[id]) settings.perTrack[id] = defaultTrackSetting();
+    }
   });
 
   wrap.append(disc, label, upload);
   hud.appendChild(wrap);
+
+  applyCameraOpacity();
+  loadTrack(0, false); // 預載第一首（不自動播，等使用者點）
+
+  // 供設定畫面即時套用變更
+  return {
+    tracks,
+    applySettings() {
+      applyCameraOpacity();
+      const t = tracks[idx];
+      const cfg = trackSetting(t);
+      videoEl.volume = cfg.volume / 100;
+      videoEl.style.opacity = String(cfg.mvOpacity / 100);
+    },
+  };
 }
