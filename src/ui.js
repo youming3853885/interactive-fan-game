@@ -117,19 +117,27 @@ export function createUI(canvas) {
       if (!s.hand) {
         ctx.fillText('👋 揮手讓鏡頭看到你', cx, H * 0.4);
       } else {
-        // 方塊
-        ctx.strokeStyle = s.ready ? '#5dff9b' : color; ctx.lineWidth = 5;
+        // 方塊：固定側色（左藍右紅），不變色
+        ctx.strokeStyle = color; ctx.lineWidth = 6;
         ctx.strokeRect(box.x, box.y, box.w, box.h);
-        // 由下往上填進度
+        // 由下往上填進度（側色）
         const f = (s.hold / state.need) * box.h;
-        ctx.fillStyle = (s.ready ? '#5dff9b' : color) + '66';
+        ctx.fillStyle = color + '55';
         ctx.fillRect(box.x, box.y + box.h - f, box.w, f);
-        const remain = Math.ceil(state.need - s.hold);
-        ctx.fillStyle = '#fff'; ctx.font = `bold ${Math.round(H * 0.05)}px system-ui`;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.fillText(s.ready ? 'OK ✓' : `把手放進方塊 ${remain}`, cx, box.y - H * 0.05);
-        // 手掌圖示
+        // 手掌圖示（先畫，倒數數字疊在上面）
         drawHand(s.hand, color);
+        // 大倒數 5→0（框正中央）
+        const remain = Math.max(0, Math.ceil(state.need - s.hold));
+        ctx.fillStyle = '#fff';
+        ctx.strokeStyle = color; ctx.lineWidth = 6;
+        ctx.font = `bold ${Math.round(box.h * 0.7)}px system-ui`;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        const label = s.ready ? 'GO!' : String(remain);
+        ctx.strokeText(label, box.x + box.w / 2, box.y + box.h / 2);
+        ctx.fillText(label, box.x + box.w / 2, box.y + box.h / 2);
+        // 說明字（框上方，側色）
+        ctx.fillStyle = color; ctx.font = `bold ${Math.round(H * 0.028)}px system-ui`;
+        ctx.fillText('把手放進方塊維持', cx, box.y - H * 0.045);
       }
     }
   }
