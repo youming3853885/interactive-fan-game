@@ -80,8 +80,8 @@ export function createUI(canvas) {
     if (center && R) {
       const dx = pt.x - center.x, dy = pt.y - center.y;
       const ang = Math.atan2(dy, dx), rad = Math.hypot(dx, dy);
-      // 減弱吸附：只把手往圓軌拉一點點；且越靠近中心越不拉(避免角度爆走亂甩)。
-      const K = 0.35 * Math.min(1, rad / (R * 0.5));
+      // 強吸附：角度跟真手、半徑幾乎鎖在圓軌上；越靠近中心越不拉(避免角度爆走亂甩)。
+      const K = 0.85 * Math.min(1, rad / (R * 0.5));
       const rx = center.x + R * Math.cos(ang), ry = center.y + R * Math.sin(ang);
       mx = pt.x + (rx - pt.x) * K; my = pt.y + (ry - pt.y) * K;
     }
