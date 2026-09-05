@@ -247,15 +247,16 @@ async function loop(pose) {
     // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
     // marker 每跑滿一圈=完成一圈 → 用該圈平均轉速判定 PERFECT/GREAT/GOOD、加分/combo/特效音效。
     const ON = 1.2, OFF = 0.5; // 遲滯門檻（rad/s）
+    const MAXW = 16; // marker 最高角速度上限（rad/s，避免爆衝）
     const stepPlayer = (st, omega, cx, cy, color) => {
-      st.oEMA += 0.3 * (omega - st.oEMA);
+      st.oEMA += 0.4 * (omega - st.oEMA); // 平滑真實角速度（跟手但不抖）
       const correctSign = dirSign > 0 ? st.oEMA > 0 : st.oEMA < 0;
       if (segDir === 'S') st.active = false;
       else if (!st.active && correctSign && Math.abs(st.oEMA) > ON) st.active = true;
       else if (st.active && (!correctSign || Math.abs(st.oEMA) < OFF)) st.active = false;
-      // 緩加/減速：active→速度平滑升到目標、放開→平滑降到 0，marker 不會硬啟停 → 更滑順
-      const targetSpd = st.active ? guideOmega : 0;
-      st.spd += (targetSpd - st.spd) * Math.min(1, dt * 8);
+      // marker 速度＝跟隨你的真實轉速（平滑後），轉快就快、轉慢就慢；再做緩加減速避免硬啟停。
+      const targetSpd = st.active ? Math.min(MAXW, Math.abs(st.oEMA)) : 0;
+      st.spd += (targetSpd - st.spd) * Math.min(1, dt * 10);
       if (st.spd > 0.02) {
         st.mAng += dirSign * st.spd * dt;
         st.mAcc += st.spd * dt;

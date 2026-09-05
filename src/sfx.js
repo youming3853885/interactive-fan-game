@@ -51,13 +51,15 @@ export const sfx = {
   },
 };
 
-// 預載語音檔（放 public/voice/；缺檔就靜默退回 TTS）。
+// 預載語音檔（放 public/voice/；優先 .mp3（自己錄/AI 生的真人聲），沒有退 .wav，再沒有退 TTS）。
 const voiceClips = {};
 try {
   const base = import.meta.env.BASE_URL;
   for (const w of ['good', 'great', 'perfect', 'combo']) {
-    const a = new Audio(base + `voice/${w}.wav`);
+    const a = new Audio();
     a.preload = 'auto'; a.volume = 0.95;
+    a.src = base + `voice/${w}.mp3`;
+    a.addEventListener('error', function onErr() { a.removeEventListener('error', onErr); a.src = base + `voice/${w}.wav`; }, { once: true });
     voiceClips[w] = a;
   }
 } catch { /* 忽略 */ }
