@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="760" viewBox="0 0 1180 760" font-family="system-ui,'Microsoft JhengHei',sans-serif">
+  <defs>
+    <marker id="arw" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 Z" fill="#333"/></marker>
+    <style>
+      .box{fill:#f7f9fc;stroke:#334;stroke-width:2;rx:10}
+      .lbl{font-size:15px;fill:#111;font-weight:700}
+      .pin{font-size:12px;fill:#333}
+      .note{font-size:12px;fill:#555}
+      .w12{stroke:#e23b3b;stroke-width:3;fill:none}   /* 12V 紅 */
+      .w5{stroke:#f39c12;stroke-width:3;fill:none}     /* 5V 橘 */
+      .wg{stroke:#222;stroke-width:3;fill:none}        /* GND 黑 */
+      .ws{stroke:#2b7bff;stroke-width:2.4;fill:none}   /* 訊號 藍 */
+      .wd{stroke:#8e44ad;stroke-width:2.6;fill:none}   /* 燈資料 紫 */
+      .cap{fill:#fff;stroke:#0a8a5f;stroke-width:2}
+      .capT{font-size:11px;fill:#0a8a5f;font-weight:700}
+    </style>
+  </defs>
+
+  <text x="24" y="34" font-size="22" font-weight="800" fill="#111">畫圈對決 · 接線圖（Arduino UNO ＋ L298N ＋ 2 馬達 ＋ 2 WS2812）</text>
+  <text x="24" y="56" class="note">重點：Arduino 走 USB 供電；12V/10A 只給馬達＋(降壓後)燈；全部共地。⚠ 不要把 12V 灌 Arduino DC 接頭、不要讓馬達/燈電流走 Arduino 5V 腳。</text>
+
+  <!-- 電源 12V/10A -->
+  <rect x="30" y="90" width="170" height="86" rx="10" class="box"/>
+  <text x="45" y="120" class="lbl">電源 12V / 10A</text>
+  <text x="45" y="142" class="pin">＋12V</text><circle cx="190" cy="137" r="4" fill="#e23b3b"/>
+  <text x="45" y="162" class="pin">GND</text><circle cx="190" cy="157" r="4" fill="#222"/>
+
+  <!-- 降壓 12V->5V -->
+  <rect x="30" y="300" width="170" height="96" rx="10" class="box"/>
+  <text x="45" y="330" class="lbl">降壓模組</text>
+  <text x="45" y="350" class="lbl">12V → 5V（≥5A）</text>
+  <text x="45" y="372" class="pin">IN+ / IN−</text>
+  <text x="45" y="390" class="pin">OUT+5V / GND</text>
+  <circle cx="190" cy="345" r="4" fill="#e23b3b"/><circle cx="190" cy="365" r="4" fill="#222"/>
+  <circle cx="190" cy="382" r="4" fill="#f39c12"/><circle cx="30" cy="382" r="4" fill="#222"/>
+
+  <!-- Arduino UNO -->
+  <rect x="300" y="90" width="210" height="190" rx="10" class="box"/>
+  <text x="320" y="118" class="lbl">Arduino UNO</text>
+  <rect x="286" y="120" width="18" height="34" rx="3" fill="#bbb" stroke="#334"/>
+  <text x="250" y="112" class="note" transform="rotate(-90 250,180)">USB → 電腦（供電＋Web Serial）</text>
+  <!-- 右側數位腳 -->
+  <text x="420" y="145" class="pin">D3(ENA~)</text><circle cx="510" cy="140" r="4" fill="#2b7bff"/>
+  <text x="420" y="163" class="pin">D2(IN1)</text><circle cx="510" cy="158" r="4" fill="#2b7bff"/>
+  <text x="420" y="181" class="pin">D4(IN2)</text><circle cx="510" cy="176" r="4" fill="#2b7bff"/>
+  <text x="420" y="199" class="pin">D5(ENB~)</text><circle cx="510" cy="194" r="4" fill="#2b7bff"/>
+  <text x="420" y="217" class="pin">D7(IN3)</text><circle cx="510" cy="212" r="4" fill="#2b7bff"/>
+  <text x="420" y="235" class="pin">D8(IN4)</text><circle cx="510" cy="230" r="4" fill="#2b7bff"/>
+  <text x="420" y="253" class="pin">D6(燈A)</text><circle cx="510" cy="248" r="4" fill="#8e44ad"/>
+  <text x="420" y="271" class="pin">D9(燈B)</text><circle cx="510" cy="266" r="4" fill="#8e44ad"/>
+  <!-- 左下 GND -->
+  <text x="316" y="271" class="pin">GND</text><circle cx="308" cy="266" r="4" fill="#222"/>
+
+  <!-- L298N -->
+  <rect x="620" y="110" width="210" height="200" rx="10" class="box"/>
+  <text x="640" y="138" class="lbl">L298N 雙 H 橋</text>
+  <text x="636" y="160" class="pin">+12V</text><circle cx="620" cy="156" r="4" fill="#e23b3b"/>
+  <text x="636" y="180" class="pin">GND</text><circle cx="620" cy="176" r="4" fill="#222"/>
+  <text x="636" y="205" class="pin">ENA IN1 IN2</text>
+  <text x="636" y="223" class="pin">ENB IN3 IN4</text>
+  <circle cx="620" cy="200" r="4" fill="#2b7bff"/><circle cx="620" cy="218" r="4" fill="#2b7bff"/>
+  <!-- 馬達輸出 -->
+  <text x="742" y="250" class="pin">OUT1/2 →A</text><circle cx="830" cy="246" r="4" fill="#e23b3b"/>
+  <text x="742" y="286" class="pin">OUT3/4 →B</text><circle cx="830" cy="282" r="4" fill="#e23b3b"/>
+
+  <!-- 馬達 A / B -->
+  <rect x="930" y="210" width="120" height="70" rx="10" class="box"/>
+  <text x="955" y="250" class="lbl">馬達 A</text>
+  <rect x="930" y="300" width="120" height="70" rx="10" class="box"/>
+  <text x="955" y="340" class="lbl">馬達 B</text>
+  <!-- 馬達端 100nF -->
+  <rect x="1058" y="228" width="14" height="34" class="cap"/><text x="1076" y="250" class="capT">100nF</text>
+  <rect x="1058" y="318" width="14" height="34" class="cap"/><text x="1076" y="340" class="capT">100nF</text>
+
+  <!-- WS2812 -->
+  <rect x="560" y="470" width="180" height="80" rx="10" class="box"/>
+  <text x="580" y="498" class="lbl">WS2812 燈條 A</text>
+  <text x="580" y="520" class="pin">5V / GND / DIN(D6)</text>
+  <rect x="800" y="470" width="180" height="80" rx="10" class="box"/>
+  <text x="820" y="498" class="lbl">WS2812 燈條 B</text>
+  <text x="820" y="520" class="pin">5V / GND / DIN(D9)</text>
+
+  <!-- 大電容 1000uF 在 L298N 12V 端 -->
+  <rect x="590" y="330" width="26" height="46" rx="4" class="cap"/>
+  <text x="560" y="392" class="capT">1000µF / 25V</text>
+  <text x="560" y="406" class="capT">(跨 12V–GND)</text>
+
+  <!-- ===== 電源線 12V(紅) ===== -->
+  <path class="w12" d="M194,137 V72 H605 V156 H620"/>        <!-- PSU12V → 頂部繞過Arduino → L298N +12V -->
+  <path class="w12" d="M194,137 V345 H186"/>                 <!-- 分支 → 降壓 IN+ -->
+  <path class="w12" d="M603,330 V156 H620" />                 <!-- 大電容 上腳 → 12V -->
+  <path class="w12" d="M830,246 H905 V240 H930"/>            <!-- OUT →馬達A -->
+  <path class="w12" d="M830,282 H900 V335 H930"/>            <!-- OUT →馬達B -->
+
+  <!-- ===== 5V(橘) ===== -->
+  <path class="w5" d="M194,382 H520 V480 H560"/>             <!-- 降壓5V → 燈A 5V -->
+  <path class="w5" d="M520,480 H800"/>                        <!-- → 燈B 5V -->
+
+  <!-- ===== GND(黑) 共地匯流 ===== -->
+  <path class="wg" d="M194,157 H260 V690 H1000"/>            <!-- PSU GND → 底部共地匯流排 -->
+  <path class="wg" d="M186,365 V690"/>                        <!-- 降壓 GND -->
+  <path class="wg" d="M616,176 V690"/>                        <!-- L298N GND -->
+  <path class="wg" d="M603,376 V690"/>                        <!-- 大電容 下腳 GND -->
+  <path class="wg" d="M308,266 V300 H276 V690"/>             <!-- Arduino GND -->
+  <path class="wg" d="M650,550 V690"/>                        <!-- 燈A GND -->
+  <path class="wg" d="M890,550 V690"/>                        <!-- 燈B GND -->
+  <text x="1004" y="694" class="note">← 共地 (所有 GND 接在一起)</text>
+
+  <!-- ===== 訊號(藍) Arduino→L298N ===== -->
+  <path class="ws" d="M510,140 H548 V200 H616"/>            <!-- D3→ENA -->
+  <path class="ws" d="M510,158 H556 V206 H616"/>
+  <path class="ws" d="M510,176 H564 V212 H616"/>
+  <path class="ws" d="M510,194 H572 V218 H616"/>
+  <path class="ws" d="M510,212 H580 V224 H616"/>
+  <path class="ws" d="M510,230 H588 V230 H616"/>
+
+  <!-- ===== 燈資料(紫) ===== -->
+  <path class="wd" d="M510,248 H540 V455 H648 V470"/>       <!-- D6 → 燈A DIN -->
+  <path class="wd" d="M510,266 H528 V460 H888 V470"/>       <!-- D9 → 燈B DIN -->
+
+  <!-- 圖例 -->
+  <rect x="30" y="470" width="480" height="200" rx="10" fill="#fff" stroke="#ccd" stroke-width="1.5"/>
+  <text x="46" y="496" class="lbl">圖例 / 線色</text>
+  <line x1="46" y1="516" x2="86" y2="516" class="w12"/><text x="94" y="520" class="pin">12V（電源→L298N馬達電、馬達）</text>
+  <line x1="46" y1="538" x2="86" y2="538" class="w5"/><text x="94" y="542" class="pin">5V（降壓→WS2812）</text>
+  <line x1="46" y1="560" x2="86" y2="560" class="wg"/><text x="94" y="564" class="pin">GND 共地（全部接一起）</text>
+  <line x1="46" y1="582" x2="86" y2="582" class="ws"/><text x="94" y="586" class="pin">控制訊號 Arduino→L298N（ENA/IN…）</text>
+  <line x1="46" y1="604" x2="86" y2="604" class="wd"/><text x="94" y="608" class="pin">燈條資料 D6/D9→DIN</text>
+  <text x="46" y="632" class="capT">綠色＝電容：1000µF(12V端防當機) ＋ 馬達端100nF(壓火花)</text>
+  <text x="46" y="652" class="note">協定：A,F,180,45;B,R,200,60（頻道,方向,PWM,能量）</text>
+</svg>
