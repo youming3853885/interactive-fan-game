@@ -88,12 +88,13 @@ export function createSelectScreen(hud, onPick) {
   durProbe.preload = 'metadata';
   const durCache = {};
   function showDuration() {
+    if (lenMode === 'chorus') { $('ssDur').textContent = `時長 ${formatTime(60)}`; return; } // 副歌固定 60 秒
     const t = tracks[i];
     const d = durCache[t.id];
     $('ssDur').textContent = `時長 ${formatTime(d)}`;
     if (d === undefined) {
       durProbe.src = t.src;
-      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t) $('ssDur').textContent = `時長 ${formatTime(durProbe.duration)}`; };
+      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t && lenMode !== 'chorus') $('ssDur').textContent = `時長 ${formatTime(durProbe.duration)}`; };
     }
   }
 
@@ -144,6 +145,7 @@ export function createSelectScreen(hud, onPick) {
     b.addEventListener('click', () => {
       lenMode = b.dataset.len;
       screen.querySelectorAll('.ss-len [data-len]').forEach((x) => x.classList.toggle('on', x === b));
+      showDuration(); // 切換時長模式即時更新時長顯示（副歌→1:00）
       sfx.hover();
     });
   });
