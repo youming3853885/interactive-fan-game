@@ -10,6 +10,10 @@ export const BUILTIN_TRACKS = [
     src: `${base}mv/initial-d.mp4`, cover: `${base}covers/initial-d.jpg` },
   { id: 'bumblebee', name: '大黃蜂的飛行', sub: '古典 · 快板', bpm: 165,
     src: `${base}mv/flight-of-bumblebee.mp4`, cover: `${base}covers/flight-of-bumblebee.jpg` },
+  { id: 'dragon-boat', name: '彩龍船', sub: '龍門國小國樂團', bpm: 140,
+    src: `${base}mv/dragon-boat.mp4`, cover: `${base}covers/dragon-boat.jpg` },
+  { id: 'golden-snake', name: '金蛇狂舞', sub: '龍門國小國樂團', bpm: 168,
+    src: `${base}mv/golden-snake.mp4`, cover: `${base}covers/golden-snake.jpg` },
 ];
 
 // 難度隨 BPM 成正比（越快越難），回傳 1~5 星數；bpm 缺值回 0。
