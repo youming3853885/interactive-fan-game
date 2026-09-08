@@ -91,11 +91,14 @@ export function createSelectScreen(hud, onPick) {
     if (lenMode === 'chorus') { $('ssDur').textContent = `時長 ${formatTime(60)}`; return; } // 副歌固定 60 秒
     const t = tracks[i];
     const d = durCache[t.id];
-    $('ssDur').textContent = `時長 ${formatTime(d)}`;
     if (d === undefined) {
+      $('ssDur').textContent = `時長 ${formatTime(NaN)}`; // 探測中先顯示 --:--
       durProbe.src = t.src;
-      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t && lenMode !== 'chorus') $('ssDur').textContent = `時長 ${formatTime(durProbe.duration)}`; };
+      durProbe.onloadedmetadata = () => { durCache[t.id] = durProbe.duration; if (tracks[i] === t) showDuration(); };
+      return;
     }
+    const shown = lenMode === '2' ? Math.min(120, d) : d; // 2分鐘上限120秒；完整曲=全長
+    $('ssDur').textContent = `時長 ${formatTime(shown)}`;
   }
 
   function render() {
