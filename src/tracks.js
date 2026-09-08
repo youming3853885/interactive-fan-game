@@ -16,6 +16,9 @@ export const BUILTIN_TRACKS = [
     src: `${base}mv/golden-snake.mp4`, cover: `${base}covers/golden-snake.jpg` },
 ];
 
+// 每首推導副歌短片路徑（public/mv/{id}-chorus.mp4）
+for (const t of BUILTIN_TRACKS) t.chorusSrc = `${base}mv/${t.id}-chorus.mp4`;
+
 // 難度隨 BPM 成正比（越快越難），回傳 1~5 星數；bpm 缺值回 0。
 export function bpmToStars(bpm) {
   if (!bpm) return 0;
@@ -27,4 +30,11 @@ export function bpmToStars(bpm) {
 
 export function starString(n) {
   return '★'.repeat(n) + '☆'.repeat(5 - n);
+}
+
+// 選歌時長模式 → 播放來源與本局長度。
+// roundSec 為 null 表示「開播後由 MV loadedmetadata 的 duration 決定」（沿用現行邏輯）。
+export function pickPlayback(track, lenMode) {
+  if (lenMode === 'chorus') return { src: track.chorusSrc, roundSec: 60 };
+  return { src: track.src, roundSec: null };
 }
