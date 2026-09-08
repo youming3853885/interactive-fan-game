@@ -39,11 +39,55 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     modal.append(box);
   }
 
+  // 硬體測試開關：遊戲前逐一確認左右風機/燈條（1P=A、2P=B）。狀態不存檔，重整即歸零。
+  let resetHwTest = null;
+  if (arduino && arduino.test) {
+    const hwTest = { fanA: false, fanB: false, ledA: false, ledB: false };
+    const box = document.createElement('div');
+    box.style.cssText = 'margin-bottom:14px;padding:12px;background:#ffffff10;border-radius:8px;';
+    const t = document.createElement('div');
+    t.textContent = '硬體測試（遊戲前逐一確認）';
+    t.style.cssText = 'font-weight:bold;margin-bottom:8px;';
+    box.append(t);
+
+    const grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;';
+    const defs = [['fanA', '風機 1P'], ['fanB', '風機 2P'], ['ledA', '燈條 1P'], ['ledB', '燈條 2P']];
+    const btns = {};
+    const paint = (key, label) => {
+      const on = hwTest[key];
+      btns[key].textContent = `${label}：${on ? '開' : '關'}`;
+      btns[key].style.cssText = 'padding:10px 6px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;' +
+        (on ? 'background:#2b7bff;color:#fff;border:1px solid #6ea8ff;' : 'background:#ffffff12;color:#cdd6ff;border:1px solid #fff3;');
+    };
+    for (const [key, label] of defs) {
+      const b = document.createElement('button');
+      btns[key] = b;
+      b.addEventListener('click', () => { hwTest[key] = !hwTest[key]; paint(key, label); arduino.test(hwTest); });
+      paint(key, label);
+      grid.append(b);
+    }
+    box.append(grid);
+
+    const stopAll = document.createElement('button');
+    stopAll.textContent = '全部停止';
+    stopAll.style.cssText = 'margin-top:8px;width:100%;padding:8px;border-radius:8px;cursor:pointer;background:#c0392b;color:#fff;border:none;font-weight:700;';
+    const reset = (send) => {
+      let any = false;
+      for (const [key, label] of defs) { if (hwTest[key]) any = true; hwTest[key] = false; paint(key, label); }
+      if (send && any) arduino.test(hwTest);
+    };
+    stopAll.addEventListener('click', () => reset(true));
+    box.append(stopAll);
+    modal.append(box);
+    resetHwTest = () => reset(true); // 關窗安全：停掉還在轉的風機/燈
+  }
+
   const body = document.createElement('div');
   modal.append(body);
 
   const open = () => { backdrop.style.display = 'flex'; };
-  const close = () => { backdrop.style.display = 'none'; };
+  const close = () => { backdrop.style.display = 'none'; if (resetHwTest) resetHwTest(); };
   gear.addEventListener('click', open);
   closeBtn.addEventListener('click', close);
   backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
