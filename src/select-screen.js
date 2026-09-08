@@ -33,7 +33,7 @@ export function createSelectScreen(hud, onPick) {
       <div class="ss-sub" id="ssSub"></div>
       <div class="ss-info"><span id="ssBpm"></span><span class="ss-stars" id="ssStars"></span></div>
       <div class="ss-len">遊戲長度
-        <span class="ss-seg"><button data-len="2" class="on">2 分鐘</button><button data-len="F">完整曲</button></span>
+        <span class="ss-seg"><button data-len="chorus">60秒副歌</button><button data-len="2" class="on">2 分鐘</button><button data-len="F">完整曲</button></span>
         <span class="ss-dur" id="ssDur"></span>
       </div>
     </div>

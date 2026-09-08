@@ -1,4 +1,5 @@
 import { defaultTrackSetting } from './settings.js';
+import { pickPlayback } from './tracks.js';
 
 // 背景 MV <video> 的無介面播放控制器：載入/播放內建曲目、套用每首歌的
 // 開始/停止/音量/透明度、鏡頭透明度。實際起播由遊戲流程呼叫 playTrack。
@@ -14,11 +15,11 @@ export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTrack
     cameraEl.style.opacity = String(settings.cameraOpacity / 100);
   }
 
-  function loadTrack(i, autoplay) {
+  function loadTrack(i, autoplay, lenMode) {
     idx = i;
     const t = tracks[idx];
     const cfg = trackSetting(t);
-    videoEl.src = t.src; // 從頭播；遊玩時間由選歌時的 2分鐘/全曲決定
+    videoEl.src = pickPlayback(t, lenMode).src; // chorus 模式載 -chorus.mp4，否則完整 MV
     videoEl.volume = cfg.volume / 100;
     videoEl.style.opacity = String(cfg.mvOpacity / 100);
     if (autoplay) videoEl.play().catch(() => {});
@@ -29,8 +30,8 @@ export function createMusicWidget(hud, videoEl, cameraEl, settings, builtinTrack
 
   return {
     tracks,
-    prep(i) { loadTrack(i, false); }, // 只載入緩衝、不自動播（給 ready 期間預熱）
-    playTrack(i) { loadTrack(i, true); },
+    prep(i, lenMode) { loadTrack(i, false, lenMode); }, // 只載入緩衝、不自動播
+    playTrack(i, lenMode) { loadTrack(i, true, lenMode); },
     applySettings() {
       applyCameraOpacity();
       const t = tracks[idx];

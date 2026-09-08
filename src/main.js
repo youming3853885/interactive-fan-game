@@ -2,7 +2,7 @@ import { wristAngle, trackRotation } from './motion.js';
 import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
-import { BUILTIN_TRACKS, bpmToStars } from './tracks.js';
+import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
 import { formatCommand, channelFor } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
@@ -114,14 +114,16 @@ function estimateMaxScore(sec, b) {
 function startPlaying() {
   const t = media.tracks[selectedIdx];
   bpm = t.bpm || 120;
+  const pb = pickPlayback(t, lenMode);                 // { src, roundSec }
   const songLen = Number.isFinite(mvVideo.duration) ? mvVideo.duration : 120;
-  roundSec = lenMode === '2' ? Math.min(120, songLen) : songLen;
+  roundSec = pb.roundSec != null ? pb.roundSec         // chorus 固定 60
+    : (lenMode === '2' ? Math.min(120, songLen) : songLen);
   chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
   maxScore = estimateMaxScore(roundSec, bpm); // 本局理想最高分 → 能量條滿格基準
   scoreA = newScore();
   scoreB = newScore();
   ended = false;
-  media.playTrack(selectedIdx);
+  media.playTrack(selectedIdx, lenMode);               // 傳 lenMode，chorus 會載短片
   if (!mvAnalyser) { try { mvAnalyser = attachAnalyser(mvVideo); mvFreq = new Uint8Array(mvAnalyser.frequencyBinCount); } catch { mvAnalyser = null; } }
   scoreS = newScore();
   rotA.lastAngle = null; rotB.lastAngle = null; rotS.lastAngle = null;
@@ -131,6 +133,7 @@ function startPlaying() {
   lastCountSec = -1; victoryResult = null;
   phase = 'playing';
   mvVideo.addEventListener('loadedmetadata', () => {
+    if (pb.roundSec != null) return;                   // chorus：固定 60，不用 duration 覆蓋
     const sl = mvVideo.duration;
     if (Number.isFinite(sl)) { roundSec = lenMode === '2' ? Math.min(120, sl) : sl; chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec); }
   }, { once: true });
@@ -169,7 +172,7 @@ async function boot() {
   modeModal = createModeModal(hud, (picked) => {
     mode = picked;
     selectScreen.hide(); showControls(false);
-    media.prep(selectedIdx); // 開始緩衝選中的 MV（利用 5 秒 ready 期間邊載）
+    media.prep(selectedIdx, lenMode); // 用 ready 期間預載選中曲（chorus 模式載短片）
     startReady();
   });
 
