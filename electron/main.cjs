@@ -4,8 +4,8 @@ const { pickArduinoPort } = require('./pick-port.cjs');
 
 function createWindow() {
   const win = new BrowserWindow({
-    fullscreen: true,
-    kiosk: true,
+    width: 1280,
+    height: 800,
     autoHideMenuBar: true,
     backgroundColor: '#05060d',
     webPreferences: {
@@ -27,7 +27,7 @@ function createWindow() {
 
   win.loadFile(path.join(__dirname, '..', 'dist-electron', 'index.html'));
 
-  // 離開：Ctrl+Shift+Q（kiosk 下鎖住一般關閉，留一個隱藏退出鍵）
+  // 視窗模式：可直接按右上角 X 關閉；另留 Ctrl+Shift+Q 快速離開
   win.webContents.on('before-input-event', (e, input) => {
     if (input.control && input.shift && input.key.toLowerCase() === 'q') app.quit();
   });
