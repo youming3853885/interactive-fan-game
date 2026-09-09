@@ -151,6 +151,7 @@ function startPlaying() {
   }, { once: true });
 }
 
+let lastStopPhase = ''; // 記住上次在哪個閒置階段送過停止，避免每幀狂送蓋掉硬體測試指令
 function sendStop() {
   sender.send(formatCommand({ dir: 'S', pwm: 0, energy: 0 }, { dir: 'S', pwm: 0, energy: 0 })).catch(() => {});
 }
@@ -245,7 +246,8 @@ async function loop(pose) {
 
   if (phase === 'select') {
     ui.clear();
-    sendStop();
+    // 只在剛進選歌時停一次，不每幀狂送(否則會蓋掉設定裡的硬體測試指令)
+    if (lastStopPhase !== 'select') { sendStop(); lastStopPhase = 'select'; }
   } else if (phase === 'ready') {
     if (mode === 'single') {
       const inTgt = ui.handInTarget(handS);
@@ -259,8 +261,9 @@ async function loop(pose) {
       ui.drawReady({ need: READY_NEED, A: { hand: handA, hold: readyState.A.hold, ready: readyState.A.ready }, B: { hand: handB, hold: readyState.B.hold, ready: readyState.B.ready } });
       if (readyState.A.ready && readyState.B.ready) startPlaying();
     }
-    sendStop();
+    if (lastStopPhase !== 'ready') { sendStop(); lastStopPhase = 'ready'; }
   } else if (phase === 'playing') {
+    lastStopPhase = ''; // 離開閒置：下次回選歌時會再停一次
     const elapsed = (performance.now() - startTime) / 1000;
     const timeLeft = Math.max(0, roundSec - elapsed);
     const { current, next, remain } = segmentAt(chart, elapsed);
