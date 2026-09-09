@@ -158,7 +158,7 @@ export function createSelectScreen(hud, onPick) {
     $('ssDisc').classList.toggle('playing', playing);
     $('ssWrap').classList.toggle('playing', playing);
     $('ssPreview').textContent = playing ? '停止試聽' : '試聽';
-    if (playing) startPreview(); else preview.pause();
+    if (playing) startPreview(); else stopPreview(); // 停止要完整收尾(關燈光+停轉+還原文字)
   });
   $('ssStart').addEventListener('mouseenter', () => sfx.hover());
   $('ssStart').addEventListener('click', () => { sfx.confirm(); stopPreview(); onPick(i, lenMode); });
