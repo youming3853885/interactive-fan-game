@@ -3,7 +3,7 @@ import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
-import { formatCommand, channelFor } from './protocol.js';
+import { formatCommand, testChannel } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
 import { createUI } from './ui.js';
@@ -163,7 +163,7 @@ async function boot() {
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
   sp = createSettingsPanel(hud, settings, media, {
     btn: arduinoBtn, status: arduinoStatus,
-    test: (s) => sender.send(formatCommand(channelFor(s.fanA, s.ledA), channelFor(s.fanB, s.ledB))).catch(() => {}),
+    test: (s) => sender.send(formatCommand(testChannel(s.pwmA, s.ledA), testChannel(s.pwmB, s.ledB))).catch(() => {}),
   });
   selectScreen = createSelectScreen(hud, (idx, m) => {
     selectedIdx = idx; lenMode = m;

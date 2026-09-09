@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, channelFor } from './protocol.js';
+import { formatCommand, testChannel } from './protocol.js';
 
 describe('formatCommand', () => {
   it('組出 A,dir,pwm,energy;B,... 一行', () => {
@@ -11,18 +11,18 @@ describe('formatCommand', () => {
   });
 });
 
-describe('channelFor（硬體測試開關）', () => {
-  it('風機開/燈條關 → 正轉、燈能量0', () => {
-    expect(channelFor(true, false)).toEqual({ dir: 'F', pwm: 200, energy: 0 });
+describe('testChannel（硬體測試：馬達PWM＋燈條）', () => {
+  it('PWM 128/燈關 → 正轉 128、燈能量0', () => {
+    expect(testChannel(128, false)).toEqual({ dir: 'F', pwm: 128, energy: 0 });
   });
-  it('風機關/燈條開 → 停轉、燈能量100', () => {
-    expect(channelFor(false, true)).toEqual({ dir: 'S', pwm: 0, energy: 100 });
+  it('PWM 0/燈開 → 停轉、燈能量100', () => {
+    expect(testChannel(0, true)).toEqual({ dir: 'S', pwm: 0, energy: 100 });
   });
-  it('兩者關 → 全停', () => {
-    expect(channelFor(false, false)).toEqual({ dir: 'S', pwm: 0, energy: 0 });
+  it('PWM 0/燈關 → 全停', () => {
+    expect(testChannel(0, false)).toEqual({ dir: 'S', pwm: 0, energy: 0 });
   });
-  it('可組成一行測試指令（風機A、燈條B）', () => {
-    expect(formatCommand(channelFor(true, false), channelFor(false, true)))
-      .toBe('A,F,200,0;B,S,0,100\n');
+  it('可組成一行測試指令（馬達A PWM64、燈條B）', () => {
+    expect(formatCommand(testChannel(64, false), testChannel(0, true)))
+      .toBe('A,F,64,0;B,S,0,100\n');
   });
 });

@@ -39,10 +39,10 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     modal.append(box);
   }
 
-  // 硬體測試開關：遊戲前逐一確認左右風機/燈條（1P=A、2P=B）。狀態不存檔，重整即歸零。
+  // 硬體測試：馬達 PWM 分段測試(0/64/128) + 燈條開關（1P=A、2P=B）。狀態不存檔，重整即歸零。
   let resetHwTest = null;
   if (arduino && arduino.test) {
-    const hwTest = { fanA: false, fanB: false, ledA: false, ledB: false };
+    const hwTest = { pwmA: 0, pwmB: 0, ledA: false, ledB: false };
     const box = document.createElement('div');
     box.style.cssText = 'margin-bottom:14px;padding:12px;background:#ffffff10;border-radius:8px;';
     const t = document.createElement('div');
@@ -50,37 +50,63 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     t.style.cssText = 'font-weight:bold;margin-bottom:8px;';
     box.append(t);
 
-    const grid = document.createElement('div');
-    grid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;';
-    const defs = [['fanA', '風機 1P'], ['fanB', '風機 2P'], ['ledA', '燈條 1P'], ['ledB', '燈條 2P']];
-    const btns = {};
-    const paint = (key, label) => {
-      const on = hwTest[key];
-      btns[key].textContent = `${label}：${on ? '開' : '關'}`;
-      btns[key].style.cssText = 'padding:10px 6px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;' +
-        (on ? 'background:#2b7bff;color:#fff;border:1px solid #6ea8ff;' : 'background:#ffffff12;color:#cdd6ff;border:1px solid #fff3;');
-    };
-    for (const [key, label] of defs) {
-      const b = document.createElement('button');
-      btns[key] = b;
-      b.addEventListener('click', () => { hwTest[key] = !hwTest[key]; paint(key, label); arduino.test(hwTest); });
-      paint(key, label);
-      grid.append(b);
+    const send = () => arduino.test(hwTest);
+    const onCss = 'background:#2b7bff;color:#fff;border:1px solid #6ea8ff;';
+    const offCss = 'background:#ffffff12;color:#cdd6ff;border:1px solid #fff3;';
+
+    // 馬達 PWM 分段測試（板子單路上限 7A，先用低段確認會不會轉）
+    const PWM_LEVELS = [0, 64, 128];
+    const motorBtns = { pwmA: [], pwmB: [] };
+    const paintMotor = (key) => motorBtns[key].forEach(({ el, val }) => {
+      el.style.cssText = 'flex:1;padding:8px 4px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;' + (hwTest[key] === val ? onCss : offCss);
+    });
+    for (const [key, label] of [['pwmA', '馬達 1P'], ['pwmB', '馬達 2P']]) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;margin-bottom:6px;';
+      const lab = document.createElement('span');
+      lab.textContent = label; lab.style.cssText = 'min-width:52px;font-weight:700;';
+      row.append(lab);
+      for (const val of PWM_LEVELS) {
+        const b = document.createElement('button');
+        b.textContent = val === 0 ? '停' : `PWM ${val}`;
+        motorBtns[key].push({ el: b, val });
+        b.addEventListener('click', () => { hwTest[key] = val; paintMotor(key); send(); });
+        row.append(b);
+      }
+      paintMotor(key);
+      box.append(row);
     }
-    box.append(grid);
+
+    // 燈條開關
+    const ledGrid = document.createElement('div');
+    ledGrid.style.cssText = 'display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:2px;';
+    const ledBtns = {};
+    const paintLed = (key, label) => {
+      ledBtns[key].textContent = `${label}：${hwTest[key] ? '開' : '關'}`;
+      ledBtns[key].style.cssText = 'padding:10px 6px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;' + (hwTest[key] ? onCss : offCss);
+    };
+    for (const [key, label] of [['ledA', '燈條 1P'], ['ledB', '燈條 2P']]) {
+      const b = document.createElement('button');
+      ledBtns[key] = b;
+      b.addEventListener('click', () => { hwTest[key] = !hwTest[key]; paintLed(key, label); send(); });
+      paintLed(key, label);
+      ledGrid.append(b);
+    }
+    box.append(ledGrid);
 
     const stopAll = document.createElement('button');
     stopAll.textContent = '全部停止';
     stopAll.style.cssText = 'margin-top:8px;width:100%;padding:8px;border-radius:8px;cursor:pointer;background:#c0392b;color:#fff;border:none;font-weight:700;';
-    const reset = (send) => {
-      let any = false;
-      for (const [key, label] of defs) { if (hwTest[key]) any = true; hwTest[key] = false; paint(key, label); }
-      if (send && any) arduino.test(hwTest);
+    const reset = (doSend) => {
+      const any = hwTest.pwmA || hwTest.pwmB || hwTest.ledA || hwTest.ledB;
+      hwTest.pwmA = 0; hwTest.pwmB = 0; hwTest.ledA = false; hwTest.ledB = false;
+      paintMotor('pwmA'); paintMotor('pwmB'); paintLed('ledA', '燈條 1P'); paintLed('ledB', '燈條 2P');
+      if (doSend && any) send();
     };
     stopAll.addEventListener('click', () => reset(true));
     box.append(stopAll);
     modal.append(box);
-    resetHwTest = () => reset(true); // 關窗安全：停掉還在轉的風機/燈
+    resetHwTest = () => reset(true); // 關窗安全：停掉馬達/燈
   }
 
   const body = document.createElement('div');

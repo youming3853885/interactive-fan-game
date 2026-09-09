@@ -5,8 +5,8 @@ export function formatCommand(a, b) {
   return `${fmt('A', a)};${fmt('B', b)}\n`;
 }
 
-// 硬體測試：某頻道的「風機/燈條」開關 → 指令物件。風機開=正轉 PWM200，燈條開=能量100。
-// 因協定同 token 同時帶馬達(dir,pwm)與燈(energy)，兩者可獨立開關。
-export function channelFor(fanOn, ledOn) {
-  return { dir: fanOn ? 'F' : 'S', pwm: fanOn ? 200 : 0, energy: ledOn ? 100 : 0 };
+// 硬體測試：某頻道的「馬達 PWM + 燈條開關」→ 指令物件。
+// pwm>0 正轉到該 PWM、pwm=0 停；燈開=能量100。同 token 同時帶馬達與燈，兩者獨立。
+export function testChannel(pwm, ledOn) {
+  return { dir: pwm > 0 ? 'F' : 'S', pwm: Math.max(0, Math.trunc(pwm)), energy: ledOn ? 100 : 0 };
 }
