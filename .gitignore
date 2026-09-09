@@ -1,3 +1,7 @@
 node_modules/
 dist/
 音樂影片/
+
+# Electron 打包產物
+dist-electron/
+release/

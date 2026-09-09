@@ -1,5 +1,8 @@
 {
   "name": "interactive-fan-game",
+  "version": "1.0.0",
+  "description": "影像辨識畫圈對決節奏遊戲（澎湖縣龍門國小）",
+  "author": "youming",
   "private": true,
   "type": "module",
   "main": "electron/main.cjs",
@@ -7,17 +10,26 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run"
+    "test": "vitest run",
+    "build:electron": "cross-env ELECTRON=1 vite build --outDir dist-electron",
+    "start:electron": "cross-env ELECTRON=1 vite build --outDir dist-electron && electron .",
+    "dist:exe": "cross-env ELECTRON=1 vite build --outDir dist-electron && electron-builder --win portable"
+  },
+  "build": {
+    "appId": "com.longmen.circleduel",
+    "productName": "畫圈對決",
+    "directories": { "output": "release" },
+    "files": ["dist-electron/**/*", "electron/**/*"],
+    "asar": true,
+    "win": { "target": "portable" }
   },
   "devDependencies": {
+    "@tensorflow-models/pose-detection": "^2.1.3",
+    "@tensorflow/tfjs": "^4.22.0",
     "cross-env": "^7.0.3",
     "electron": "^31.7.7",
     "electron-builder": "^25.1.8",
     "vite": "^5.4.0",
     "vitest": "^2.1.0"
-  },
-  "dependencies": {
-    "@tensorflow-models/pose-detection": "^2.1.3",
-    "@tensorflow/tfjs": "^4.22.0"
   }
 }
