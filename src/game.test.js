@@ -5,10 +5,10 @@ describe('fanCommand', () => {
   it('停手 → S / pwm 0', () => {
     expect(fanCommand(0, CONFIG)).toEqual({ dir: 'S', pwm: 0 });
   });
-  it('滿速正轉 → F / pwm 255', () => {
-    expect(fanCommand(CONFIG.omegaMax, CONFIG)).toEqual({ dir: 'F', pwm: 255 });
+  it('正轉 → F / 固定 20% 動力(pwm 51)', () => {
+    expect(fanCommand(CONFIG.omegaMax, CONFIG)).toEqual({ dir: 'F', pwm: 51 });
   });
-  it('滿速反轉 → R / pwm 255', () => {
-    expect(fanCommand(-CONFIG.omegaMax, CONFIG)).toEqual({ dir: 'R', pwm: 255 });
+  it('反轉 → R / 固定 20% 動力(pwm 51)', () => {
+    expect(fanCommand(-CONFIG.omegaMax, CONFIG)).toEqual({ dir: 'R', pwm: 51 });
   });
 });
