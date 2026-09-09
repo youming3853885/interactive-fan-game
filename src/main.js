@@ -38,8 +38,12 @@ arduinoStatus.textContent = '示範模式（無需 Arduino，直接開始也能�
 
 let sender = simSender((line) => { arduinoStatus.textContent = line; });
 arduinoBtn.addEventListener('click', async () => {
-  try { sender = await connectSerial(); arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true; }
-  catch (e) { alert(e.message); }
+  try {
+    const usb = await connectSerial();
+    // 包一層：USB 送出時也把指令回寫到綠字，讓使用者看得到有送出（原本只有 sim 會顯示）
+    sender = { name: 'USB', send: (line) => { arduinoStatus.textContent = line.trim(); return usb.send(line); } };
+    arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true;
+  } catch (e) { alert(e.message); }
 });
 
 // 設定齒輪只在選歌畫面顯示，遊戲中退場
