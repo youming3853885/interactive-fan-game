@@ -42,8 +42,9 @@ arduinoBtn.addEventListener('click', async () => {
     const usb = await connectSerial();
     // 包一層：USB 送出時把指令回寫綠字；送出失敗就顯示錯誤（不再默默吞掉）
     sender = { name: 'USB', send: (line) => {
-      arduinoStatus.textContent = line.trim(); // 點下去立刻回寫(證明有觸發送出)
-      return usb.send(line).catch((err) => { arduinoStatus.textContent = '⚠ 送出失敗：' + (err && err.message || err); });
+      arduinoStatus.textContent = line.trim(); // 保證先回寫(證明點擊有觸發，與寫入成敗無關)
+      Promise.resolve(usb.send(line)).catch((err) => { arduinoStatus.textContent = '⚠ 送出失敗：' + (err && err.message || err); });
+      return Promise.resolve();
     } };
     arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true;
   } catch (e) { alert(e.message); }
