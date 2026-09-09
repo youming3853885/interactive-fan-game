@@ -41,14 +41,12 @@ void setup() {
   selfTest();
 }
 
-// 開機自檢：兩馬達各正反轉一下 + 兩燈帶跑一次能量條，確認接線。
+// 開機自檢：內建燈眨 3 下 + 兩馬達各正轉一下（不逆轉）+ 兩燈帶跑一次能量條，確認接線。
 void selfTest() {
   for (int i = 0; i < 3; i++) { digitalWrite(LED_BUILTIN, HIGH); delay(120); digitalWrite(LED_BUILTIN, LOW); delay(120); } // 內建燈眨 3 下
-  driveMotor(IN1, IN2, ENA, 'F', 64); delay(400);
-  driveMotor(IN1, IN2, ENA, 'R', 64); delay(400);
+  driveMotor(IN1, IN2, ENA, 'F', 64); delay(600);   // 只正轉（要看久一點把 600 加大）
   driveMotor(IN1, IN2, ENA, 'S', 0);
-  driveMotor(IN3, IN4, ENB, 'F', 64); delay(400);
-  driveMotor(IN3, IN4, ENB, 'R', 64); delay(400);
+  driveMotor(IN3, IN4, ENB, 'F', 64); delay(600);
   driveMotor(IN3, IN4, ENB, 'S', 0);
   for (int e = 0; e <= 100; e += 10) { setLeds(ledsA, e, CRGB::Cyan); setLeds(ledsB, e, CRGB::Magenta); FastLED.show(); delay(50); }
   setLeds(ledsA, 0, CRGB::Cyan); setLeds(ledsB, 0, CRGB::Magenta); FastLED.show();
