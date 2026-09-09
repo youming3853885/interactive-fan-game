@@ -13,6 +13,7 @@
     "test": "vitest run",
     "build:electron": "cross-env ELECTRON=1 vite build --outDir dist-electron",
     "start:electron": "cross-env ELECTRON=1 vite build --outDir dist-electron && electron .",
+    "dist:dir": "cross-env ELECTRON=1 vite build --outDir dist-electron && electron-builder --win dir",
     "dist:exe": "cross-env ELECTRON=1 vite build --outDir dist-electron && electron-builder --win portable"
   },
   "build": {
@@ -20,7 +21,7 @@
     "productName": "畫圈對決",
     "directories": { "output": "release" },
     "files": ["dist-electron/**/*", "electron/**/*"],
-    "asar": true,
+    "asar": false,
     "win": { "target": "portable" }
   },
   "devDependencies": {
