@@ -7,12 +7,15 @@ export async function connectSerial(baud = 115200) {
   }
   const port = await navigator.serial.requestPort();
   await port.open({ baudRate: baud });
-  const encoder = new TextEncoderStream();
-  encoder.readable.pipeTo(port.writable);
-  const writer = encoder.writable.getWriter();
+  // 明確拉高 DTR/RTS：有些 CH340 不設會送不出資料（開埠也會 DTR 重置 Arduino）
+  try { await port.setSignals({ dataTerminalReady: true, requestToSend: true }); } catch { /* 平台不支援就略過 */ }
+  // 直接寫 port.writable（不經 TextEncoderStream pipe，較穩、每筆立即送出）
+  const enc = new TextEncoder();
+  const writer = port.writable.getWriter();
   return {
     name: 'USB',
-    async send(line) { await writer.write(line); },
+    port,
+    async send(line) { await writer.write(enc.encode(line)); },
   };
 }
 

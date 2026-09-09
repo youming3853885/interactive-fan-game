@@ -40,8 +40,11 @@ let sender = simSender((line) => { arduinoStatus.textContent = line; });
 arduinoBtn.addEventListener('click', async () => {
   try {
     const usb = await connectSerial();
-    // 包一層：USB 送出時也把指令回寫到綠字，讓使用者看得到有送出（原本只有 sim 會顯示）
-    sender = { name: 'USB', send: (line) => { arduinoStatus.textContent = line.trim(); return usb.send(line); } };
+    // 包一層：USB 送出時把指令回寫綠字；送出失敗就顯示錯誤（不再默默吞掉）
+    sender = { name: 'USB', send: async (line) => {
+      try { await usb.send(line); arduinoStatus.textContent = line.trim(); }
+      catch (err) { arduinoStatus.textContent = '⚠ 送出失敗：' + (err && err.message || err); throw err; }
+    } };
     arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true;
   } catch (e) { alert(e.message); }
 });
