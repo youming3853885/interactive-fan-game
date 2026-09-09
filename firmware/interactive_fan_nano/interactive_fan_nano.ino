@@ -27,6 +27,7 @@
 #define LED_A_PIN 7
 #define LED_B_PIN 8
 #define NUM_LEDS 100          // 依實際燈帶顆數調整（4m 條先取前 100 顆）
+#define PWM_MAX 38            // 風機輸出上限 15%(255*0.15)：硬性保護，避免驅動板過熱
 
 CRGB ledsA[NUM_LEDS];
 CRGB ledsB[NUM_LEDS];
@@ -44,19 +45,20 @@ void setup() {
 // 開機自檢：內建燈眨 3 下 + 兩馬達各正轉一下（不逆轉）+ 兩燈帶跑一次能量條，確認接線。
 void selfTest() {
   for (int i = 0; i < 3; i++) { digitalWrite(LED_BUILTIN, HIGH); delay(120); digitalWrite(LED_BUILTIN, LOW); delay(120); } // 內建燈眨 3 下
-  driveMotor(IN1, IN2, ENA, 'F', 64); delay(600);   // 只正轉（要看久一點把 600 加大）
+  driveMotor(IN1, IN2, ENA, 'F', 64); delay(3000);   // 只正轉（要看久一點把 600 加大）
   driveMotor(IN1, IN2, ENA, 'S', 0);
-  driveMotor(IN3, IN4, ENB, 'F', 64); delay(600);
+  driveMotor(IN3, IN4, ENB, 'F', 64); delay(3000);
   driveMotor(IN3, IN4, ENB, 'S', 0);
   for (int e = 0; e <= 100; e += 10) { setLeds(ledsA, e, CRGB::Cyan); setLeds(ledsB, e, CRGB::Magenta); FastLED.show(); delay(50); }
   setLeds(ledsA, 0, CRGB::Cyan); setLeds(ledsB, 0, CRGB::Magenta); FastLED.show();
 }
 
-// H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。
+// H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。PWM 一律夾到 PWM_MAX(15%)保護驅動板。
 void driveMotor(int inA, int inB, int en, char dir, int pwm) {
   digitalWrite(inA, dir == 'F' ? HIGH : LOW);
   digitalWrite(inB, dir == 'R' ? HIGH : LOW);
-  analogWrite(en, dir == 'S' ? 0 : pwm);
+  int p = pwm > PWM_MAX ? PWM_MAX : pwm;   // 硬性上限，任何指令(自檢/測試/遊玩)都不超過 15%
+  analogWrite(en, dir == 'S' ? 0 : p);
 }
 
 void setLeds(CRGB* leds, int energy, CRGB color) {
