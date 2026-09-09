@@ -47,6 +47,10 @@ arduinoBtn.addEventListener('click', async () => {
       return Promise.resolve();
     } };
     arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true;
+    // 一連上就自動送一筆 T,1 驗證「瀏覽器→埠」寫得出去（結果直接顯示在綠字）
+    arduinoStatus.textContent = '已連接，自動測試送出 T,1…';
+    try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 送出成功！Nano 內建燈應會亮(自檢結束後)'; }
+    catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
   } catch (e) { alert(e.message); }
 });
 
