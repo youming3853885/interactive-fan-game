@@ -33,6 +33,7 @@ CRGB ledsB[NUM_LEDS];
 
 void setup() {
   Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);      // D13 內建燈：測連線用
   pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
   FastLED.addLeds<WS2812B, LED_A_PIN, GRB>(ledsA, NUM_LEDS);
@@ -42,11 +43,12 @@ void setup() {
 
 // 開機自檢：兩馬達各正反轉一下 + 兩燈帶跑一次能量條，確認接線。
 void selfTest() {
-  driveMotor(IN1, IN2, ENA, 'F', 120); delay(400);
-  driveMotor(IN1, IN2, ENA, 'R', 120); delay(400);
+  for (int i = 0; i < 3; i++) { digitalWrite(LED_BUILTIN, HIGH); delay(120); digitalWrite(LED_BUILTIN, LOW); delay(120); } // 內建燈眨 3 下
+  driveMotor(IN1, IN2, ENA, 'F', 64); delay(400);
+  driveMotor(IN1, IN2, ENA, 'R', 64); delay(400);
   driveMotor(IN1, IN2, ENA, 'S', 0);
-  driveMotor(IN3, IN4, ENB, 'F', 120); delay(400);
-  driveMotor(IN3, IN4, ENB, 'R', 120); delay(400);
+  driveMotor(IN3, IN4, ENB, 'F', 64); delay(400);
+  driveMotor(IN3, IN4, ENB, 'R', 64); delay(400);
   driveMotor(IN3, IN4, ENB, 'S', 0);
   for (int e = 0; e <= 100; e += 10) { setLeds(ledsA, e, CRGB::Cyan); setLeds(ledsB, e, CRGB::Magenta); FastLED.show(); delay(50); }
   setLeds(ledsA, 0, CRGB::Cyan); setLeds(ledsB, 0, CRGB::Magenta); FastLED.show();
@@ -67,6 +69,7 @@ void setLeds(CRGB* leds, int energy, CRGB color) {
 // 解析一個頻道 token，如 "A,F,180,45"
 void applyToken(char* tok) {
   char id = tok[0];
+  if (id == 'T') { digitalWrite(LED_BUILTIN, atoi(tok + 2) ? HIGH : LOW); return; } // 內建燈測連線
   char* p = strtok(tok + 2, ",");   // dir
   char dir = p ? p[0] : 'S';
   int pwm = atoi(strtok(NULL, ",")); // pwm

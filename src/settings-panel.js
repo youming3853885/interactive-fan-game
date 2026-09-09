@@ -54,6 +54,19 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     const onCss = 'background:#2b7bff;color:#fff;border:1px solid #6ea8ff;';
     const offCss = 'background:#ffffff12;color:#cdd6ff;border:1px solid #fff3;';
 
+    // Nano 內建燈（D13）：測「網頁↔Nano」序列通訊是否正常，與馬達/驅動板無關。
+    if (arduino.testLed) {
+      let nanoOn = false;
+      const nb = document.createElement('button');
+      const paintNb = () => {
+        nb.textContent = `Nano 內建燈（測連線）：${nanoOn ? '亮' : '暗'}`;
+        nb.style.cssText = 'width:100%;margin-bottom:10px;padding:10px;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;' + (nanoOn ? onCss : offCss);
+      };
+      nb.addEventListener('click', () => { nanoOn = !nanoOn; paintNb(); arduino.testLed(nanoOn); });
+      paintNb();
+      box.append(nb);
+    }
+
     // 馬達 PWM 分段測試（板子單路上限 7A，先用低段確認會不會轉）
     const PWM_LEVELS = [0, 64, 128];
     const motorBtns = { pwmA: [], pwmB: [] };

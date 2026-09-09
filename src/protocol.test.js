@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, testChannel } from './protocol.js';
+import { formatCommand, testChannel, builtinLedLine } from './protocol.js';
 
 describe('formatCommand', () => {
   it('組出 A,dir,pwm,energy;B,... 一行', () => {
@@ -24,5 +24,12 @@ describe('testChannel（硬體測試：馬達PWM＋燈條）', () => {
   it('可組成一行測試指令（馬達A PWM64、燈條B）', () => {
     expect(formatCommand(testChannel(64, false), testChannel(0, true)))
       .toBe('A,F,64,0;B,S,0,100\n');
+  });
+});
+
+describe('builtinLedLine（Nano 內建燈測連線）', () => {
+  it('亮 → T,1；暗 → T,0', () => {
+    expect(builtinLedLine(true)).toBe('T,1\n');
+    expect(builtinLedLine(false)).toBe('T,0\n');
   });
 });

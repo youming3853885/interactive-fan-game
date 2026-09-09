@@ -10,3 +10,8 @@ export function formatCommand(a, b) {
 export function testChannel(pwm, ledOn) {
   return { dir: pwm > 0 ? 'F' : 'S', pwm: Math.max(0, Math.trunc(pwm)), energy: ledOn ? 100 : 0 };
 }
+
+// Nano 內建 LED(D13)測試指令：'T,1\n'(亮)/'T,0\n'(暗)。用來驗證網頁↔Nano 序列通訊是否正常。
+export function builtinLedLine(on) {
+  return `T,${on ? 1 : 0}\n`;
+}
