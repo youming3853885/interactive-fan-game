@@ -8,6 +8,7 @@ export async function createPoseReader(video) {
   await tf.ready();
   const cfg = {
     modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING,
+    modelUrl: import.meta.env.BASE_URL + 'models/movenet-singlepose-lightning/model.json', // 本機模型(離線可用)
     enableSmoothing: true,   // 內建時間濾波降抖
     minPoseScore: 0.2,
   };
