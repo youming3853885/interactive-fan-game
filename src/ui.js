@@ -477,7 +477,7 @@ export function createUI(canvas) {
   // 單人單一中央目標圈座標（draw 與 hit-test 共用），回傳 canvas 像素。
   function singleTargets() {
     const W = canvas.width, H = canvas.height;
-    return { r: H * 0.12, C: { x: W / 2, y: H * 0.44 } };
+    return { r: H * 0.17, C: { x: W / 2, y: H * 0.44 } };
   }
   // 手是否放進中央目標圈（容忍 1.3×半徑）。
   function handInTarget(hand) {
