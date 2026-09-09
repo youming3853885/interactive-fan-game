@@ -37,9 +37,13 @@ arduinoStatus.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;'
 arduinoStatus.textContent = '示範模式（無需 Arduino，直接開始也能玩）';
 
 let sender = simSender((line) => { arduinoStatus.textContent = line; });
-arduinoBtn.addEventListener('click', async () => {
+async function doConnect({ silent = false } = {}) {
   try {
-    const usb = await connectSerial();
+    // 先用已授權的埠(免使用者手勢)；沒有才 requestPort(Electron 主程序會自動挑 CH340)
+    let port = null;
+    try { port = (await navigator.serial.getPorts())[0] || null; } catch { port = null; }
+    if (!port) port = await navigator.serial.requestPort();
+    const usb = await connectSerial(115200, port);
     // 包一層：USB 送出時把指令回寫綠字；送出失敗就顯示錯誤（不再默默吞掉）
     sender = { name: 'USB', send: (line) => {
       arduinoStatus.textContent = line.trim(); // 保證先回寫(證明點擊有觸發，與寫入成敗無關)
@@ -51,8 +55,9 @@ arduinoBtn.addEventListener('click', async () => {
     arduinoStatus.textContent = '已連接，自動測試送出 T,1…';
     try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 送出成功！Nano 內建燈應會亮(自檢結束後)'; }
     catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
-  } catch (e) { alert(e.message); }
-});
+  } catch (e) { if (!silent) alert(e.message); }
+}
+arduinoBtn.addEventListener('click', () => doConnect());
 
 // 設定齒輪只在選歌畫面顯示，遊戲中退場
 let sp = null;
@@ -195,6 +200,7 @@ async function boot() {
   phase = 'select';
   selectScreen.show(media.tracks);
   showControls(true);
+  if (window.__ELECTRON__) doConnect({ silent: true }); // Electron：開機自動連 Arduino
   loop(pose);
 }
 
