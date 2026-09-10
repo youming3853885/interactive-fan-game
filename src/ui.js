@@ -106,6 +106,9 @@ export function createUI(canvas) {
       ctx.save(); ctx.beginPath(); ctx.arc(fp.x, fp.y, H * 0.05, 0, Math.PI * 2);
       ctx.fillStyle = '#00000066'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 26;
       ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke(); ctx.restore();
+      ctx.font = `${Math.round(H * 0.075)}px system-ui`;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.fillText('🖐', fp.x, fp.y); // 手的圖案照樣顯示
       return;
     }
     if (!pt) { pushTrail(key, null); dispAng[key] = null; return; }
