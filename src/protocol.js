@@ -21,6 +21,17 @@ export function effectLine(target, code) {
   return `E,${target},${code}\n`;
 }
 
+// 得分閃爍(韌體疊加層，閃 250ms 自動回進度條)：PERFECT=1 金閃、GREAT=2 白閃、GOOD 不閃(回 null)
+export function judgeFlashLine(target, judgment) {
+  const n = judgment === 'PERFECT' ? 1 : judgment === 'GREAT' ? 2 : 0;
+  return n ? `J,${target},${n}\n` : null;
+}
+
+// 最後倒數紅色模式：進度條變紅+脈動
+export function urgentLine(on) {
+  return `U,${on ? 1 : 0}\n`;
+}
+
 // Nano 內建 LED(D13)測試指令：'T,1\n'(亮)/'T,0\n'(暗)。用來驗證網頁↔Nano 序列通訊是否正常。
 export function builtinLedLine(on) {
   return `T,${on ? 1 : 0}\n`;

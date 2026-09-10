@@ -1,5 +1,24 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine, FX } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, FX } from './protocol.js';
+
+describe('judgeFlashLine（得分閃爍疊加層）', () => {
+  it('PERFECT → 金閃 J,D,1', () => {
+    expect(judgeFlashLine('D', 'PERFECT')).toBe('J,D,1\n');
+  });
+  it('GREAT → 白閃 J,D,2', () => {
+    expect(judgeFlashLine('D', 'GREAT')).toBe('J,D,2\n');
+  });
+  it('GOOD → 不閃(null)', () => {
+    expect(judgeFlashLine('D', 'GOOD')).toBe(null);
+  });
+});
+
+describe('urgentLine（最後倒數紅色模式）', () => {
+  it('開 → U,1；關 → U,0', () => {
+    expect(urgentLine(true)).toBe('U,1\n');
+    expect(urgentLine(false)).toBe('U,0\n');
+  });
+});
 
 describe('formatCommand', () => {
   it('組出 A,dir,pwm,energy;B,... 一行', () => {
