@@ -34,7 +34,8 @@ export function direction(omega, deadzone) {
 export const CIRCLE_CFG = {
   windowSec: 1.5,       // 圓心估計窗（涵蓋約一圈；太短圓心會偏、太長跟不上人移動）
   minRadius: 15,        // px：手離圓心太近＝原地抖，不算畫圈
-  maxStep: Math.PI / 2, // 單幀角度跳超過 90° 視為偵測尖刺，丟棄該幀
+  maxOmega: 25,         // rad/s（≈4圈/秒）：換算後超過此角速度視為偵測瞬移尖刺，丟棄該幀。
+                        // 用角速度而非固定角度門檻 → 幀率慢/畫很快時不會誤殺合法步進
 };
 
 export function newCircleState() { return { pts: [], lastAngle: null }; }
@@ -54,7 +55,7 @@ export function circleStep(st, pt, t, dt, cfg = CIRCLE_CFG) {
   if (st.lastAngle === null || dt <= 0) { st.lastAngle = a; return 0; }
   const d = angularDelta(st.lastAngle, a);
   st.lastAngle = a;
-  if (Math.abs(d) > cfg.maxStep) return 0; // 尖刺：丟棄該幀
+  if (Math.abs(d) / dt > cfg.maxOmega) return 0; // 瞬移尖刺：丟棄該幀
   return d / dt;
 }
 

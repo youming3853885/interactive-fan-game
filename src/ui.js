@@ -96,13 +96,23 @@ export function createUI(canvas) {
     ctx.restore(); ctx.globalAlpha = 1;
   }
   // 手：角度跟真手(跟手方向)、半徑吸附到圓軌道(穩定不抖)；流星尾 + 畫圈時飄散粒子。
+  const dispAng = { S: null, A: null, B: null }; // 顯示角度平滑（繞角 EMA，快轉不跳格）
   function drawHandFX(key, pt, color, active, center, R, trackAng) {
     const H = canvas.height;
-    if (!pt) { pushTrail(key, null); return; }
+    if (!pt) { pushTrail(key, null); dispAng[key] = null; return; }
     let mx = pt.x, my = pt.y;
     if (center && R && trackAng != null) {
-      // 有動態圓心追蹤角度：直接放軌道上（玩家站哪裡、圈畫多大都準確跟手的旋轉）
-      mx = center.x + R * Math.cos(trackAng); my = center.y + R * Math.sin(trackAng);
+      // 有動態圓心追蹤角度：放軌道上（玩家站哪裡、圈畫多大都準確跟手的旋轉）；角度過 EMA 平滑
+      let a = dispAng[key];
+      if (a == null) a = trackAng;
+      else {
+        let dd = trackAng - a;
+        while (dd > Math.PI) dd -= 2 * Math.PI;
+        while (dd < -Math.PI) dd += 2 * Math.PI;
+        a += dd * 0.4;
+      }
+      dispAng[key] = a;
+      mx = center.x + R * Math.cos(a); my = center.y + R * Math.sin(a);
     } else if (center && R) {
       const dx = pt.x - center.x, dy = pt.y - center.y;
       const ang = Math.atan2(dy, dx), rad = Math.hypot(dx, dy);
