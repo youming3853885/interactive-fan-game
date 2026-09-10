@@ -26,20 +26,23 @@
 // WS2812 燈條
 #define LED_A_PIN 7
 #define LED_B_PIN 8
-#define NUM_LEDS 100          // 依實際燈帶顆數調整（4m 條先取前 100 顆；勿超過 150，SRAM 會爆導致當機）
+#define NUM_LEDS 240          // 4m×60燈/m=240（若你的條是30燈/m 改成120）
+#define BRIGHT 50             // 亮度上限(0-255)：兩條全亮壓在 ~4A 內，保護 5V 5A 電源；覺得暗可加到 70
 #define PWM_MAX 31            // 風機輸出上限 12%(255*0.12=31)：硬性保護，避免驅動板過熱
 
-CRGB ledsA[NUM_LEDS];
-CRGB ledsB[NUM_LEDS];
-bool ledsDirty = false;  // 燈有變才 show()：show() 會關中斷 ~6ms，狂 show 會掉序列資料
+// 兩條共用一塊緩衝（輪流畫、各自輸出）→ RAM 減半，240 顆才塞得進 Nano 的 2KB SRAM
+CRGB leds[NUM_LEDS];
+CLEDController *ctlA, *ctlB;
+byte energyA = 0, energyB = 0;
+bool ledsDirty = false;  // 燈有變才 show()：show() 會關中斷，狂 show 會掉序列資料
 
 void setup() {
   Serial.begin(115200);
   pinMode(LED_BUILTIN, OUTPUT);      // D13 內建燈：測連線用
   pinMode(ENA, OUTPUT); pinMode(IN1, OUTPUT); pinMode(IN2, OUTPUT);
   pinMode(ENB, OUTPUT); pinMode(IN3, OUTPUT); pinMode(IN4, OUTPUT);
-  FastLED.addLeds<WS2812B, LED_A_PIN, GRB>(ledsA, NUM_LEDS);
-  FastLED.addLeds<WS2812B, LED_B_PIN, GRB>(ledsB, NUM_LEDS);
+  ctlA = &FastLED.addLeds<WS2812B, LED_A_PIN, GRB>(leds, NUM_LEDS);
+  ctlB = &FastLED.addLeds<WS2812B, LED_B_PIN, GRB>(leds, NUM_LEDS);
   selfTest();
 }
 
@@ -50,8 +53,8 @@ void selfTest() {
   driveMotor(IN1, IN2, ENA, 'S', 0);
   driveMotor(IN3, IN4, ENB, 'F', PWM_MAX); delay(600);
   driveMotor(IN3, IN4, ENB, 'S', 0);
-  for (int e = 0; e <= 100; e += 10) { setLeds(ledsA, e, CRGB::Cyan); setLeds(ledsB, e, CRGB::Magenta); FastLED.show(); delay(50); }
-  setLeds(ledsA, 0, CRGB::Cyan); setLeds(ledsB, 0, CRGB::Magenta); FastLED.show();
+  for (int e = 0; e <= 100; e += 10) { energyA = e; energyB = e; showStrips(); delay(50); }
+  energyA = 0; energyB = 0; showStrips();
 }
 
 // H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。PWM 一律夾到 PWM_MAX(12%)保護驅動板。
@@ -62,9 +65,15 @@ void driveMotor(int inA, int inB, int en, char dir, int pwm) {
   analogWrite(en, dir == 'S' ? 0 : p);
 }
 
-void setLeds(CRGB* leds, int energy, CRGB color) {
+void fillEnergy(int energy, CRGB color) {
   int n = (energy * NUM_LEDS) / 100;
   for (int i = 0; i < NUM_LEDS; i++) leds[i] = (i < n) ? color : CRGB::Black;
+}
+
+// 兩條輪流畫進共用緩衝、各自輸出（BRIGHT 同時當亮度/電流上限）
+void showStrips() {
+  fillEnergy(energyA, CRGB::Cyan);    ctlA->showLeds(BRIGHT);
+  fillEnergy(energyB, CRGB::Magenta); ctlB->showLeds(BRIGHT);
 }
 
 // 解析一個頻道 token，如 "A,F,180,45"
@@ -75,10 +84,12 @@ void applyToken(char* tok) {
   char* save;
   char* p = strtok_r(tok + 2, ",", &save);   // dir
   char dir = p ? p[0] : 'S';
+  if (dir != 'F' && dir != 'R' && dir != 'S') return;  // 亂碼行(show 期間掉字)直接丟棄，下一幀會再送
   p = strtok_r(NULL, ",", &save); int pwm = p ? atoi(p) : 0;
   p = strtok_r(NULL, ",", &save); int energy = p ? atoi(p) : 0;
-  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); setLeds(ledsA, energy, CRGB::Cyan); ledsDirty = true; }
-  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); setLeds(ledsB, energy, CRGB::Magenta); ledsDirty = true; }
+  if (energy < 0) energy = 0; if (energy > 100) energy = 100;
+  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); energyA = energy; ledsDirty = true; }
+  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); energyB = energy; ledsDirty = true; }
 }
 
 void loop() {
@@ -96,6 +107,6 @@ void loop() {
       buf[len++] = c;
     }
   }
-  // 燈有變且距上次 >30ms 才 show()：show() 關中斷期間序列資料會掉字，狂 show 會讓指令變亂碼
-  if (ledsDirty && millis() - lastShow > 30) { FastLED.show(); ledsDirty = false; lastShow = millis(); }
+  // 燈有變且距上次 >100ms 才更新：兩條 240 顆各輸出一次會關中斷 ~14ms，太頻繁會讓序列指令掉字
+  if (ledsDirty && millis() - lastShow > 100) { showStrips(); ledsDirty = false; lastShow = millis(); }
 }

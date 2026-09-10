@@ -122,6 +122,8 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     box.append(stopAll);
     modal.append(box);
     resetHwTest = () => reset(true); // 關窗安全：停掉馬達/燈
+    // Nano 自檢期間收不了指令 → 鎖住整個測試區，避免使用者亂按以為壞了
+    arduino.setTestEnabled = (v) => { box.style.pointerEvents = v ? '' : 'none'; box.style.opacity = v ? '' : '0.45'; };
   }
 
   const body = document.createElement('div');

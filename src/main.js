@@ -54,11 +54,14 @@ async function doConnect({ silent = false, picker = false } = {}) {
       return Promise.resolve();
     } };
     arduinoBtn.textContent = '已連接 (USB)｜點此重選 port'; // 保持可按，讓使用者能換 port
-    // 開埠會重置 Nano → 跑自檢(~5秒)，期間指令會丟。等自檢結束再送 T,1 驗證通訊。
-    arduinoStatus.textContent = '已連接，等 Nano 自檢(約5秒)…';
-    await new Promise((r) => setTimeout(r, 5000));
-    try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 通訊正常！Nano 內建燈應已亮起'; }
-    catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
+    // 開埠會重置 Nano → 跑自檢(~5秒)，期間指令會丟。鎖住測試按鈕，等自檢結束再送 T,1 驗證通訊。
+    arduinoStatus.textContent = '已連接，Nano 自檢中(約5秒)，請稍候…';
+    if (arduinoCtl.setTestEnabled) arduinoCtl.setTestEnabled(false);
+    try {
+      await new Promise((r) => setTimeout(r, 5000));
+      await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 通訊正常！Nano 內建燈應已亮起';
+    } catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
+    finally { if (arduinoCtl.setTestEnabled) arduinoCtl.setTestEnabled(true); }
   } catch (e) { if (!silent) alert(e.message); }
 }
 arduinoBtn.addEventListener('click', () => doConnect({ picker: true })); // 手動一定跳選埠視窗
@@ -76,6 +79,13 @@ arduinoDisc.addEventListener('click', async () => {
     arduinoStatus.textContent = '已斷開、埠已釋放（Arduino IDE 現在可用了）';
   } catch (e) { arduinoStatus.textContent = '斷開失敗：' + (e && e.message || e); }
 });
+
+// 傳給設定面板的硬體控制組；settings-panel 會掛上 setTestEnabled（自檢期間鎖測試按鈕用）
+const arduinoCtl = {
+  btn: arduinoBtn, status: arduinoStatus, disc: arduinoDisc,
+  test: (s) => sender.send(formatCommand(testChannel(s.pwmA, s.ledA), testChannel(s.pwmB, s.ledB))).catch(() => {}),
+  testLed: (on) => sender.send(builtinLedLine(on)).catch(() => {}),
+};
 
 // 設定齒輪只在選歌畫面顯示，遊戲中退場
 let sp = null;
@@ -197,11 +207,7 @@ async function boot() {
   settings = loadSettings(BUILTIN_TRACKS.map((t) => t.id));
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
-  sp = createSettingsPanel(hud, settings, media, {
-    btn: arduinoBtn, status: arduinoStatus, disc: arduinoDisc,
-    test: (s) => sender.send(formatCommand(testChannel(s.pwmA, s.ledA), testChannel(s.pwmB, s.ledB))).catch(() => {}),
-    testLed: (on) => sender.send(builtinLedLine(on)).catch(() => {}),
-  });
+  sp = createSettingsPanel(hud, settings, media, arduinoCtl);
   selectScreen = createSelectScreen(hud, (idx, m) => {
     selectedIdx = idx; lenMode = m;
     modeModal.show();
