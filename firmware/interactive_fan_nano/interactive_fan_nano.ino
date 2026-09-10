@@ -7,7 +7,7 @@
 //
 // ---- Arduino Nano 接腳（HQT 2 路直流馬達驅動板：ENA/INT1/INT2 每路） ----
 //   馬達 A（風機 1P）：ENA→D3(PWM~)  INT1→D2  INT2→D4
-//   馬達 B（風機 2P）：ENB→D5(PWM~)  INT3→D9  INT4→D10
+//   馬達 B（風機 2P）：ENB→D11(PWM~)  INT3→D9  INT4→D10   ※ ENB 已從 D5 改到 D11（頻率對等）
 //   WS2812 燈條：DIN A→D7、DIN B→D8（串 330Ω 更穩）
 //   GND：驅動板 GND + 5V燈電源 GND + Arduino GND 全部共地（沒共地→燈不亮/馬達不動）
 //   USB：電腦（供電 + Web Serial）
@@ -22,9 +22,13 @@
 #define IN1 2
 #define IN2 4
 // 馬達 B（風機 2P）
-#define ENB 5
+#define ENB 11   // ⚠ 從 D5 移到 D11：D5(Timer0)PWM 頻率 976Hz、D3(Timer2)只有 490Hz，
+                 //   頻率不同過光耦後有效動力差很大 → D11 與 D3 同 Timer2、同 490Hz，兩台才對等
 #define IN3 9
 #define IN4 10
+// 兩台馬達個體差微調(%)：實測某台偏慢就把它調大（100=不加不減，例：TRIM_B 110 = B 加一成）
+#define TRIM_A 100
+#define TRIM_B 100
 // WS2812 燈條
 #define LED_A_PIN 7
 #define LED_B_PIN 8
@@ -73,8 +77,9 @@ void selfTest() {
   }
 }
 
-// H 橋直接輸出（最底層，上限 TEST_MAX）
+// H 橋直接輸出（最底層，套個體差微調後夾到 TEST_MAX 上限）
 void motorOut(byte i, char dir, int pwm) {
+  pwm = (int)((long)pwm * (i == 0 ? TRIM_A : TRIM_B) / 100);
   if (pwm > TEST_MAX) pwm = TEST_MAX;
   digitalWrite(M_INA[i], dir == 'F' ? HIGH : LOW);
   digitalWrite(M_INB[i], dir == 'R' ? HIGH : LOW);
