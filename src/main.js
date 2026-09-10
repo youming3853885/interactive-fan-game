@@ -158,6 +158,7 @@ function barFullScore() {
 }
 let urgentSent = false; // 最後 10 秒紅色模式只送一次
 let warmupEnd = 0;      // 熱身圈結束時間
+let prevSegDir = '';    // 段落切換偵測（休息結束時清追蹤窗）
 // FEVER：任一玩家能量條滿 → 10 秒狂熱（分數×2、燈條彩虹）；結束後該玩家條歸零再衝
 const feverBase = { S: 0, A: 0, B: 0 };
 let feverUntil = 0, feverKey = '', feverPrev = false;
@@ -181,6 +182,7 @@ function startPlaying() {
   if (!mvAnalyser) { try { mvAnalyser = attachAnalyser(mvVideo); mvFreq = new Uint8Array(mvAnalyser.frequencyBinCount); } catch { mvAnalyser = null; } }
   scoreS = newScore();
   resetCircle(cirA); resetCircle(cirB); resetCircle(cirS);
+  prevSegDir = '';
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
   startTime = performance.now();
   last = startTime;
@@ -313,6 +315,11 @@ async function loop(pose) {
     const timeLeft = Math.max(0, roundSec - elapsed);
     const { current, next, remain } = segmentAt(chart, elapsed);
     const segDir = current ? current.dir : 'S';
+    // 休息結束 → 清追蹤窗：不讓 1.5 秒窗裡的「垂手位置點」污染新段落的圓心估計
+    if (segDir !== prevSegDir) {
+      if (prevSegDir === 'S') { resetCircle(cirA); resetCircle(cirB); resetCircle(cirS); }
+      prevSegDir = segDir;
+    }
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
     if (mvAnalyser) mvAnalyser.getByteFrequencyData(mvFreq); // 取 MV 即時頻譜
     const dirSign = segDir === 'R' ? -1 : 1;
