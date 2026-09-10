@@ -623,9 +623,6 @@ export function createUI(canvas) {
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
-      // 幽靈領航星：以「目標速率」沿當前段落方向前進；休息段暫停
-      const gSign = state.segDir === 'R' ? -1 : 1;
-      if (state.segDir === 'F' || state.segDir === 'R') ghostAng += gSign * (state.guideOmega || 0) / 60;
       const gFrac = (s) => Math.max(0, Math.min(1, s / (state.maxScore || 3000)));
       const TICKS = [{ f: 0.45, g: 'B', col: '#5ec8ff' }, { f: 0.75, g: 'A', col: '#c99cff' }, { f: 1, g: 'S', col: gold }];
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
@@ -633,20 +630,19 @@ export function createUI(canvas) {
       drawSchool();                                                        // 校名（最上層之一）
       drawClock(W / 2, H * 0.11, Math.max(0, Math.ceil(state.timeLeft))); // 遊戲式電子鐘
       drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
-      // 休息段中央文字（甩甩手＋下一段預告）
+      // 休息段中央文字（甩甩手＋下一段預告）：貼著暫停符號下方，避開 COMBO/得分區
       const restText = (cx, cy, R) => {
         if (state.segDir !== 'S') return;
         ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
         ctx.fillStyle = '#8ff0bb'; ctx.shadowColor = '#8ff0bb'; ctx.shadowBlur = 16;
-        ctx.font = `900 ${Math.round(H * 0.06)}px system-ui`;
-        ctx.fillText(`休息 ${Math.max(0, Math.ceil(state.nextIn))}`, cx, cy + R * 0.78);
-        ctx.shadowBlur = 0; ctx.fillStyle = '#dfe4ff'; ctx.font = `700 ${Math.round(H * 0.028)}px system-ui`;
-        ctx.fillText(`甩甩手～下一段：${state.nextDir === 'R' ? '反轉' : '正轉'}`, cx, cy + R * 1.0);
+        ctx.font = `900 ${Math.round(H * 0.05)}px system-ui`;
+        ctx.fillText(`休息 ${Math.max(0, Math.ceil(state.nextIn))}`, cx, cy + R * 0.62);
+        ctx.shadowBlur = 0; ctx.fillStyle = '#dfe4ff'; ctx.font = `700 ${Math.round(H * 0.026)}px system-ui`;
+        ctx.fillText(`甩甩手～下一段：${state.nextDir === 'R' ? '反轉' : '正轉'}`, cx, cy + R * 0.80);
       };
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
-        if (state.segDir !== 'S') drawGhost(cx, cy, R); // 幽靈領航星
         drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R); // 跟手方向+吸附圓軌
         restText(cx, cy, R);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
@@ -658,7 +654,6 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
-          if (state.segDir !== 'S') drawGhost(cx, cy, R);
           drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R);
           restText(cx, cy, R);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
@@ -758,8 +753,8 @@ export function createUI(canvas) {
         ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.055)}px system-ui`;
         ctx.fillText(`A ${Math.round(result.scoreA * ease)} : ${Math.round(result.scoreB * ease)} B`, cx, H * 0.6);
       }
-      ctx.fillStyle = '#aeb4d8'; ctx.font = `${Math.round(H * 0.025)}px system-ui`;
-      ctx.shadowBlur = 0; ctx.fillText(SCHOOL, cx, H * 0.78);
+      ctx.fillStyle = '#dfe6ff'; ctx.font = `700 ${Math.round(H * 0.038)}px system-ui`;
+      ctx.shadowBlur = 0; ctx.fillText(SCHOOL, cx, H * 0.92); // 放大＋移到最下方，不與插畫/分數重疊
     },
   };
   return api;
