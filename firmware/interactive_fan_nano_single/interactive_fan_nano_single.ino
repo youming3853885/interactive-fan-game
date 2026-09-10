@@ -9,7 +9,7 @@
 //
 // ---- 接腳（同正式版，只是 D8 不接） ----
 //   馬達 A（風機 1P）：ENA→D3(PWM~)  INT1→D2  INT2→D4
-//   馬達 B（風機 2P）：ENB→D11(PWM~)  INT3→D9  INT4→D10   ※ ENB 已從 D5 改到 D11（頻率對等）
+//   馬達 B（風機 2P）：ENB→D5(PWM~)  INT3→D9  INT4→D10
 //   WS2812 燈條：DIN→D7（串 330Ω 更穩；資料要從燈條「箭頭起點」那端進）
 //   GND：驅動板 GND + 5V燈電源 GND + Arduino GND 全部共地
 
@@ -20,13 +20,14 @@
 #define IN1 2
 #define IN2 4
 // 馬達 B（風機 2P）
-#define ENB 11   // ⚠ 從 D5 移到 D11：D5(Timer0)PWM 頻率 976Hz、D3(Timer2)只有 490Hz，
-                 //   頻率不同過光耦後有效動力差很大 → D11 與 D3 同 Timer2、同 490Hz，兩台才對等
+#define ENB 5    // D5(Timer0)PWM 頻率 976Hz、D3(Timer2)490Hz：頻率不同過光耦後 2P 動力會偏弱，
+                 //   用下面 TRIM_B 補償（不想補償可把 ENB 接 D11=與 D3 同頻，TRIM_B 改回 100）
 #define IN3 9
 #define IN4 10
-// 兩台馬達個體差微調(%)：實測某台偏慢就把它調大（100=不加不減，例：TRIM_B 110 = B 加一成）
+// 兩台馬達個體差微調(%)：實測哪台偏慢就把它調大（100=不加不減）
 #define TRIM_A 100
-#define TRIM_B 100
+#define TRIM_B 120   // 預設 +20% 補償 D5 高頻率被光耦吃掉的動力；2P 反而偏快就往下調
+
 // WS2812 燈條（單條）
 #define LED_PIN 8
 #define NUM_LEDS 240          // 4m×60燈/m=240，全亮（若是30燈/m 改成120）
