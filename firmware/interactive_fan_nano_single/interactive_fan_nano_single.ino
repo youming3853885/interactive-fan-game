@@ -3,8 +3,10 @@
 //               單條獨享 5V 5A 電源，亮度上限拉高(BRIGHT 100)。馬達控制完全相同。
 // 收 Web Serial 一行指令（分號分隔多個 token）：
 //   A,F,180,45   遊戲頻道：頻道id,方向(F/R/S),PWM(0..255),能量(0..100)。A=1P、B=2P。
-//   M,A,51       馬達分段測試：PWM 0..77。>38(15%) 的高檔限時 5 秒自動回落＋冷卻 8 秒。
+//   M,A,51       馬達分段測試：PWM 0..77。>51(20%) 的高檔限時 5 秒自動回落＋冷卻 8 秒。
 //   E,D,9        燈條特效：目標 A/B/D 一律套用到這條，特效碼 0..11（與前端 protocol.js FX 對應）。
+//   J,D,1        得分閃爍疊加層：1=金閃(PERFECT)、2=白閃(GREAT)，250ms 自動回原顯示。
+//   U,1          最後倒數紅色模式：進度條變紅+脈動；U,0 解除。
 //   T,1          Nano 內建燈(D13)：測「網頁↔Nano」連線。
 //
 // ---- 接腳（同正式版，只是 D8 不接） ----
@@ -26,16 +28,15 @@
 #define IN4 10
 // 兩台馬達個體差微調(%)：實測哪台偏慢就把它調大（100=不加不減）
 #define TRIM_A 100
-#define TRIM_B 120   // 預設 +20% 補償 D5 高頻率被光耦吃掉的動力；2P 反而偏快就往下調
+#define TRIM_B 100   // 20% 為實測可用值，不再額外補償
 
 // WS2812 燈條（單條）
 #define LED_PIN 8
 #define NUM_LEDS 240          // 4m×60燈/m=240，全亮（若是30燈/m 改成120）
+#define REVERSED 1            // 燈條實體擺放頭尾相反時設 1：輸出前整條顛倒（起點對到觀眾看的起點）
 #define BRIGHT 100            // 單條獨享 5V 5A：全亮約 3.8A，比雙條版亮一倍；上限別超過 120
-#define PWM_MAX 38            // 遊戲中風機上限 15%(255*0.15=38)：實測堵轉門檻~10%，留餘裕；硬上限保護驅動板
+#define PWM_MAX 51            // 遊戲中風機上限 20%(255*0.20=51)：殘缺版整場定速，20% 免踢腳可起轉
 #define TEST_MAX 77           // 測試分頁上限 30%：高檔只能短時間跑（見 motorTest 限時）
-#define KICK_PWM 64           // 啟動踢腳 25%：靜摩擦>動摩擦，起轉先踢一下再回運轉檔
-#define KICK_MS 300           // 踢腳時長；兩台的踢腳會強制錯開，峰值電流永遠只有一台在抽
 
 CRGB leds[NUM_LEDS];
 
@@ -47,11 +48,13 @@ byte fx = 0;
 byte energy = 0;
 unsigned long fxStart = 0;
 bool ledsDirty = false;
+// 疊加層：得分閃爍(250ms 自動消退) + 最後倒數紅色模式
+unsigned long flashUntil = 0;
+CRGB flashColor = CRGB::White;
+bool urgent = false;
 
-// ---- 馬達狀態（0=A/1P、1=B/2P）----
+// ---- 馬達（0=A/1P、1=B/2P）：殘缺版不踢腳，指令直接輸出 ----
 const byte M_INA[2] = {IN1, IN3}, M_INB[2] = {IN2, IN4}, M_EN[2] = {ENA, ENB};
-struct MotorState { char dir; int targetPwm; unsigned long kickStartAt, kickEndAt; };
-MotorState motors[2] = {{'S', 0, 0, 0}, {'S', 0, 0, 0}};
 unsigned long mEnd[2] = {0, 0}, mCool[2] = {0, 0};  // 高檔測試限時/冷卻
 
 void setup() {
@@ -82,42 +85,16 @@ void motorOut(byte i, char dir, int pwm) {
   analogWrite(M_EN[i], dir == 'S' ? 0 : pwm);
 }
 
-// 遊戲馬達控制：從停止/換向起動時先「踢一腳」(KICK_PWM 300ms)再回目標檔（靜摩擦>動摩擦），
-// 且兩台的踢腳強制錯開 → 峰值電流永遠只有一台在抽，解決低 PWM 起轉不了/雙機同啟電源垂降。
-void setMotor(byte i, char dir, int pwm) {
-  MotorState &m = motors[i];
-  if (dir == 'S' || pwm <= 0) { m.dir = 'S'; m.kickStartAt = 0; m.kickEndAt = 0; motorOut(i, 'S', 0); return; }
-  if (pwm > PWM_MAX) pwm = PWM_MAX;   // 遊戲硬上限 15%
-  if (m.dir == dir) {
-    m.targetPwm = pwm;
-    if (!m.kickStartAt && !m.kickEndAt) motorOut(i, dir, pwm); // 踢腳/排程中不打斷
-    return;
-  }
-  m.dir = dir; m.targetPwm = pwm;
-  unsigned long now = millis(), start = now;
-  MotorState &o = motors[1 - i];
-  unsigned long oEnd = o.kickEndAt;
-  if (o.kickStartAt && o.kickStartAt + KICK_MS > oEnd) oEnd = o.kickStartAt + KICK_MS;
-  if (oEnd > start) start = oEnd;                              // 錯開：等另一台踢完再踢
-  if (start > now) { m.kickStartAt = start; m.kickEndAt = 0; motorOut(i, 'S', 0); }
-  else { m.kickStartAt = 0; m.kickEndAt = now + KICK_MS; motorOut(i, dir, KICK_PWM); }
+// 遊戲馬達控制：直接輸出（不踢腳），夾遊戲硬上限 20%
+void motorGame(byte i, char dir, int pwm) {
+  if (pwm > PWM_MAX) pwm = PWM_MAX;
+  motorOut(i, dir, pwm);
 }
 
-// 踢腳排程推進（loop 每圈呼叫）
-void motorTick(unsigned long now) {
-  for (byte i = 0; i < 2; i++) {
-    MotorState &m = motors[i];
-    if (m.dir == 'S') continue;
-    if (m.kickStartAt && now >= m.kickStartAt) { m.kickStartAt = 0; m.kickEndAt = now + KICK_MS; motorOut(i, m.dir, KICK_PWM); }
-    else if (m.kickEndAt && now >= m.kickEndAt) { m.kickEndAt = 0; motorOut(i, m.dir, m.targetPwm); }
-  }
-}
-
-// 馬達分段測試（不踢腳，量原始行為用）：>PWM_MAX 高檔限時 5 秒＋冷卻 8 秒；冷卻中只給 15%。
+// 馬達分段測試：>PWM_MAX(20%) 高檔限時 5 秒＋冷卻 8 秒；冷卻中只給 20%。
 void motorTest(char ch, int pwm) {
   if (ch != 'A' && ch != 'B') return;
   byte i = ch == 'A' ? 0 : 1;
-  motors[i].dir = 'S'; motors[i].kickStartAt = 0; motors[i].kickEndAt = 0; // 測試接管，清遊戲/踢腳狀態
   if (pwm > PWM_MAX) {
     if (millis() < mCool[i]) pwm = PWM_MAX;
     else mEnd[i] = millis() + 5000;
@@ -162,12 +139,19 @@ void renderFx(byte m, unsigned long t) {
       break; }
     case 10: fill_rainbow(leds, NUM_LEDS, (t / 60) & 0xFF, 255 / NUM_LEDS + 1); nscale8_video(leds, NUM_LEDS, beatsin8(10, 25, 170)); break;
     case 11: barFill((int)((t % 3000) * 100 / 3000), CRGB::Green); break;
-    case FX_ENERGY: barFill(energy, base); break;
+    case FX_ENERGY: // 分數進度條；倒數紅色模式時變紅+脈動（長度仍是進度）
+      if (urgent) { barFill(energy, CRGB::Red); nscale8_video(leds, NUM_LEDS, beatsin8(72, 80, 255)); }
+      else barFill(energy, base);
+      break;
   }
 }
 
 void showStrip() {
   renderFx(fx, millis() - fxStart);
+  if (millis() < flashUntil) fill_solid(leds, NUM_LEDS, flashColor); // 得分閃爍疊加層
+#if REVERSED
+  for (int i = 0, j = NUM_LEDS - 1; i < j; i++, j--) { CRGB tmp = leds[i]; leds[i] = leds[j]; leds[j] = tmp; } // 實體頭尾顛倒
+#endif
   FastLED.show();
 }
 
@@ -178,6 +162,12 @@ void applyToken(char* tok) {
   if (id == 'T') { digitalWrite(LED_BUILTIN, atoi(tok + 2) ? HIGH : LOW); return; }
   if (id == 'M') { motorTest(tok[2], atoi(tok + 4)); return; }
   if (id == 'E') { fx = atoi(tok + 4); fxStart = millis(); ledsDirty = true; return; }
+  if (id == 'J') { // 得分閃爍：1=金(PERFECT) 2=白(GREAT)，250ms 自動消退
+    int n = atoi(tok + 4);
+    if (n) { flashColor = (n == 1) ? CRGB::Gold : CRGB::White; flashUntil = millis() + 250; ledsDirty = true; }
+    return;
+  }
+  if (id == 'U') { urgent = atoi(tok + 2) != 0; ledsDirty = true; return; } // 倒數紅色模式
   char* save;
   char* p = strtok_r(tok + 2, ",", &save);   // dir
   char dir = p ? p[0] : 'S';
@@ -185,8 +175,8 @@ void applyToken(char* tok) {
   p = strtok_r(NULL, ",", &save); int pwm = p ? atoi(p) : 0;
   p = strtok_r(NULL, ",", &save); int e = p ? atoi(p) : 0;
   if (e < 0) e = 0; if (e > 100) e = 100;
-  if (id == 'A') { setMotor(0, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
-  else if (id == 'B') { setMotor(1, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
+  if (id == 'A') { motorGame(0, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
+  else if (id == 'B') { motorGame(1, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
 }
 
 void loop() {
@@ -205,13 +195,14 @@ void loop() {
     }
   }
   unsigned long nowMs = millis();
-  motorTick(nowMs);  // 踢腳排程推進
   for (byte i = 0; i < 2; i++) {
     if (mEnd[i] && nowMs > mEnd[i]) { motorOut(i, 'S', 0); mEnd[i] = 0; mCool[i] = nowMs + 8000; }
   }
   if (fx == 7 && nowMs - fxStart > 300) { fx = 0; ledsDirty = true; }
-  // 動態特效連續刷新(40ms)；靜態只在有變時輸出(100ms 節流)。show 關中斷會掉序列字，不能太密。
-  if ((ledsDirty || fxAnimated(fx)) && nowMs - lastShow > (unsigned long)(fxAnimated(fx) ? 40 : 100)) {
+  if (flashUntil && nowMs >= flashUntil) { flashUntil = 0; ledsDirty = true; } // 閃完補畫一幀回原顯示
+  // 動態特效/紅色脈動/閃爍中連續刷新(40ms)；靜態只在有變時輸出(100ms 節流)。show 關中斷會掉序列字，不能太密。
+  bool anim = fxAnimated(fx) || (urgent && fx == FX_ENERGY) || flashUntil;
+  if ((ledsDirty || anim) && nowMs - lastShow > (unsigned long)(anim ? 40 : 100)) {
     showStrip(); ledsDirty = false; lastShow = nowMs;
   }
 }
