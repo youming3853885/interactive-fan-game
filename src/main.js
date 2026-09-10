@@ -54,9 +54,10 @@ async function doConnect({ silent = false, picker = false } = {}) {
       return Promise.resolve();
     } };
     arduinoBtn.textContent = '已連接 (USB)｜點此重選 port'; // 保持可按，讓使用者能換 port
-    // 一連上就自動送一筆 T,1 驗證「瀏覽器→埠」寫得出去（結果直接顯示在綠字）
-    arduinoStatus.textContent = '已連接，自動測試送出 T,1…';
-    try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 送出成功！Nano 內建燈應會亮(自檢結束後)'; }
+    // 開埠會重置 Nano → 跑自檢(~5秒)，期間指令會丟。等自檢結束再送 T,1 驗證通訊。
+    arduinoStatus.textContent = '已連接，等 Nano 自檢(約5秒)…';
+    await new Promise((r) => setTimeout(r, 5000));
+    try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 通訊正常！Nano 內建燈應已亮起'; }
     catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
   } catch (e) { if (!silent) alert(e.message); }
 }

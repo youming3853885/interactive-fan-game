@@ -26,11 +26,12 @@
 // WS2812 燈條
 #define LED_A_PIN 7
 #define LED_B_PIN 8
-#define NUM_LEDS 100          // 依實際燈帶顆數調整（4m 條先取前 100 顆）
-#define PWM_MAX 31            // 風機輸出上限 12%(255*0.12)：硬性保護，避免驅動板過熱
+#define NUM_LEDS 100          // 依實際燈帶顆數調整（4m 條先取前 100 顆；勿超過 150，SRAM 會爆導致當機）
+#define PWM_MAX 31            // 風機輸出上限 12%(255*0.12=31)：硬性保護，避免驅動板過熱
 
 CRGB ledsA[NUM_LEDS];
 CRGB ledsB[NUM_LEDS];
+bool ledsDirty = false;  // 燈有變才 show()：show() 會關中斷 ~6ms，狂 show 會掉序列資料
 
 void setup() {
   Serial.begin(115200);
@@ -45,19 +46,19 @@ void setup() {
 // 開機自檢：內建燈眨 3 下 + 兩馬達各正轉一下（不逆轉）+ 兩燈帶跑一次能量條，確認接線。
 void selfTest() {
   for (int i = 0; i < 3; i++) { digitalWrite(LED_BUILTIN, HIGH); delay(120); digitalWrite(LED_BUILTIN, LOW); delay(120); } // 內建燈眨 3 下
-  driveMotor(IN1, IN2, ENA, 'F', 10); delay(3000);   // 只正轉（要看久一點把 600 加大）
+  driveMotor(IN1, IN2, ENA, 'F', PWM_MAX); delay(600);   // 自檢要短：自檢期間收不了指令，太長會讓「一連上就不能控制」
   driveMotor(IN1, IN2, ENA, 'S', 0);
-  driveMotor(IN3, IN4, ENB, 'F', 10); delay(3000);
+  driveMotor(IN3, IN4, ENB, 'F', PWM_MAX); delay(600);
   driveMotor(IN3, IN4, ENB, 'S', 0);
   for (int e = 0; e <= 100; e += 10) { setLeds(ledsA, e, CRGB::Cyan); setLeds(ledsB, e, CRGB::Magenta); FastLED.show(); delay(50); }
   setLeds(ledsA, 0, CRGB::Cyan); setLeds(ledsB, 0, CRGB::Magenta); FastLED.show();
 }
 
-// H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。PWM 一律夾到 PWM_MAX(15%)保護驅動板。
+// H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。PWM 一律夾到 PWM_MAX(12%)保護驅動板。
 void driveMotor(int inA, int inB, int en, char dir, int pwm) {
   digitalWrite(inA, dir == 'F' ? HIGH : LOW);
   digitalWrite(inB, dir == 'R' ? HIGH : LOW);
-  int p = pwm > PWM_MAX ? PWM_MAX : pwm;   // 硬性上限，任何指令(自檢/測試/遊玩)都不超過 15%
+  int p = pwm > PWM_MAX ? PWM_MAX : pwm;   // 硬性上限，任何指令(自檢/測試/遊玩)都不超過 12%
   analogWrite(en, dir == 'S' ? 0 : p);
 }
 
@@ -67,29 +68,34 @@ void setLeds(CRGB* leds, int energy, CRGB color) {
 }
 
 // 解析一個頻道 token，如 "A,F,180,45"
+// ⚠ 必須用 strtok_r：外層 loop() 也在切字串，plain strtok 全域狀態會互踩 → B 頻道整段被吃掉
 void applyToken(char* tok) {
   char id = tok[0];
   if (id == 'T') { digitalWrite(LED_BUILTIN, atoi(tok + 2) ? HIGH : LOW); return; } // 內建燈測連線
-  char* p = strtok(tok + 2, ",");   // dir
+  char* save;
+  char* p = strtok_r(tok + 2, ",", &save);   // dir
   char dir = p ? p[0] : 'S';
-  int pwm = atoi(strtok(NULL, ",")); // pwm
-  int energy = atoi(strtok(NULL, ",")); // energy
-  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); setLeds(ledsA, energy, CRGB::Cyan); }
-  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); setLeds(ledsB, energy, CRGB::Magenta); }
+  p = strtok_r(NULL, ",", &save); int pwm = p ? atoi(p) : 0;
+  p = strtok_r(NULL, ",", &save); int energy = p ? atoi(p) : 0;
+  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); setLeds(ledsA, energy, CRGB::Cyan); ledsDirty = true; }
+  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); setLeds(ledsB, energy, CRGB::Magenta); ledsDirty = true; }
 }
 
 void loop() {
   static char buf[64];
   static byte len = 0;
+  static unsigned long lastShow = 0;
   while (Serial.available()) {
     char c = Serial.read();
     if (c == '\n') {
       buf[len] = 0; len = 0;
-      char* tok = strtok(buf, ";");
-      while (tok) { applyToken(tok); tok = strtok(NULL, ";"); }
-      FastLED.show();
+      char* save;
+      char* tok = strtok_r(buf, ";", &save);
+      while (tok) { applyToken(tok); tok = strtok_r(NULL, ";", &save); }
     } else if (len < sizeof(buf) - 1) {
       buf[len++] = c;
     }
   }
+  // 燈有變且距上次 >30ms 才 show()：show() 關中斷期間序列資料會掉字，狂 show 會讓指令變亂碼
+  if (ledsDirty && millis() - lastShow > 30) { FastLED.show(); ledsDirty = false; lastShow = millis(); }
 }
