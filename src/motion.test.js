@@ -31,6 +31,17 @@ describe('circleStep（動態圓心畫圈追蹤）', () => {
     for (let i = 0; i < 90; i++) om = circleStep(st, { x: 100 + (i % 2), y: 100 }, i * DT, DT);
     expect(om).toBe(0);
   });
+  it('垂手休息很久 → 重新畫圈快速恢復（舊停滯點不拖累）', () => {
+    const st = newCircleState();
+    for (let i = 0; i < 90; i++) circleStep(st, { x: 200, y: 500 }, i * DT, DT); // 垂手 3 秒
+    let acc = 0;
+    for (let i = 0; i < 54; i++) { // 恢復畫圈 1.8 秒：前 0.8 秒暖機、量後 1 秒
+      const t = 3 + i * DT;
+      const om = circleStep(st, { x: 300 + 80 * Math.cos(5 * t), y: 200 + 80 * Math.sin(5 * t) }, t, DT);
+      if (i >= 24) acc += om * DT;
+    }
+    expect(acc).toBeGreaterThan(5 * 1 * 0.6); // 1 秒累積角度至少達真實值的 60%
+  });
   it('掉偵測(null) → 清空重來、ω=0', () => {
     const st = newCircleState();
     runCircle(st, { cx: 300, cy: 200, r: 80, w: 4, from: 0, to: 2 });

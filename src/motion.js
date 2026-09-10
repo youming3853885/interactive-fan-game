@@ -36,6 +36,7 @@ export const CIRCLE_CFG = {
   minRadius: 15,        // px：手離圓心太近＝原地抖，不算畫圈
   maxOmega: 25,         // rad/s（≈4圈/秒）：換算後超過此角速度視為偵測瞬移尖刺，丟棄該幀。
                         // 用角速度而非固定角度門檻 → 幀率慢/畫很快時不會誤殺合法步進
+  stillKeepSec: 0.3,    // 手幾乎沒動（垂手休息/發呆）時窗只留這麼短 → 重新畫圈永遠像開場一樣即刻就緒
 };
 
 export function newCircleState() { return { pts: [], lastAngle: null }; }
@@ -49,6 +50,14 @@ export function circleStep(st, pt, t, dt, cfg = CIRCLE_CFG) {
   let cx = 0, cy = 0;
   for (const p of st.pts) { cx += p.x; cy += p.y; }
   cx /= st.pts.length; cy /= st.pts.length;
+  let spread = 0;
+  for (const p of st.pts) spread += Math.hypot(p.x - cx, p.y - cy);
+  spread /= st.pts.length;
+  // 手幾乎沒動（整窗擠成一坨）：窗縮到只留最近 stillKeepSec —— 舊的停滯點不會污染
+  // 之後的圓心估計，任何時候重新開始畫圈都跟開場一樣新鮮。
+  if (spread < cfg.minRadius) {
+    while (st.pts.length && t - st.pts[0].t > cfg.stillKeepSec) st.pts.shift();
+  }
   const dx = pt.x - cx, dy = pt.y - cy;
   if (Math.hypot(dx, dy) < cfg.minRadius) { st.lastAngle = null; return 0; }
   const a = Math.atan2(dy, dx);
@@ -77,7 +86,7 @@ export function circleAngle(st, cfg = CIRCLE_CFG) {
 // pickArm 每幀重挑「舉較高的手」，畫圈中另一隻手一抬就跳換目標 → 角度大跳。
 // 改成：鎖住目前追蹤的手；連續 maxMiss 幀無效才重挑。
 // 玩家「真的換手」時也要跟上：另一隻手明顯舉更高（差 marginPx 以上）持續 switchFrames 幀 → 換過去。
-export function createArmPicker(maxMiss = 12, switchFrames = 15, marginPx = 40) {
+export function createArmPicker(maxMiss = 12, switchFrames = 8, marginPx = 30) {
   let side = null, miss = 0, better = 0;
   const cand = (p, s) => {
     const wrist = s === 'L' ? p.leftWrist : p.rightWrist;
