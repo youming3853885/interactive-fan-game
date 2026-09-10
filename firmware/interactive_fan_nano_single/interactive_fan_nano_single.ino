@@ -7,6 +7,7 @@
 //   E,D,9        燈條特效：目標 A/B/D 一律套用到這條，特效碼 0..11（與前端 protocol.js FX 對應）。
 //   J,D,1        得分閃爍疊加層：1=金閃(PERFECT)、2=白閃(GREAT)，250ms 自動回原顯示。
 //   U,1          最後倒數紅色模式：進度條變紅+脈動；U,0 解除。
+//   V,1          FEVER 狂熱：進度條改全彩流動（優先於紅色模式）；V,0 解除。
 //   T,1          Nano 內建燈(D13)：測「網頁↔Nano」連線。
 //
 // ---- 接腳（同正式版，只是 D8 不接） ----
@@ -48,10 +49,11 @@ byte fx = 0;
 byte energy = 0;
 unsigned long fxStart = 0;
 bool ledsDirty = false;
-// 疊加層：得分閃爍(250ms 自動消退) + 最後倒數紅色模式
+// 疊加層：得分閃爍(250ms 自動消退) + 最後倒數紅色模式 + FEVER 全彩流動
 unsigned long flashUntil = 0;
 CRGB flashColor = CRGB::White;
 bool urgent = false;
+bool fever = false;
 
 // ---- 馬達（0=A/1P、1=B/2P）：殘缺版不踢腳，指令直接輸出 ----
 const byte M_INA[2] = {IN1, IN3}, M_INB[2] = {IN2, IN4}, M_EN[2] = {ENA, ENB};
@@ -139,8 +141,9 @@ void renderFx(byte m, unsigned long t) {
       break; }
     case 10: fill_rainbow(leds, NUM_LEDS, (t / 60) & 0xFF, 255 / NUM_LEDS + 1); nscale8_video(leds, NUM_LEDS, beatsin8(10, 25, 170)); break;
     case 11: barFill((int)((t % 3000) * 100 / 3000), CRGB::Green); break;
-    case FX_ENERGY: // 分數進度條；倒數紅色模式時變紅+脈動（長度仍是進度）
-      if (urgent) { barFill(energy, CRGB::Red); nscale8_video(leds, NUM_LEDS, beatsin8(72, 80, 255)); }
+    case FX_ENERGY: // 分數進度條；FEVER=全彩流動（優先）、倒數紅色=變紅+脈動（長度仍是進度）
+      if (fever) { fill_rainbow(leds, NUM_LEDS, (millis() / 12) & 0xFF, 255 / NUM_LEDS + 1); }
+      else if (urgent) { barFill(energy, CRGB::Red); nscale8_video(leds, NUM_LEDS, beatsin8(72, 80, 255)); }
       else barFill(energy, base);
       break;
   }
@@ -168,6 +171,7 @@ void applyToken(char* tok) {
     return;
   }
   if (id == 'U') { urgent = atoi(tok + 2) != 0; ledsDirty = true; return; } // 倒數紅色模式
+  if (id == 'V') { fever = atoi(tok + 2) != 0; ledsDirty = true; return; }  // FEVER 全彩流動
   char* save;
   char* p = strtok_r(tok + 2, ",", &save);   // dir
   char dir = p ? p[0] : 'S';
@@ -175,8 +179,8 @@ void applyToken(char* tok) {
   p = strtok_r(NULL, ",", &save); int pwm = p ? atoi(p) : 0;
   p = strtok_r(NULL, ",", &save); int e = p ? atoi(p) : 0;
   if (e < 0) e = 0; if (e > 100) e = 100;
-  if (id == 'A') { motorGame(0, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
-  else if (id == 'B') { motorGame(1, dir, pwm); energy = e; fx = FX_ENERGY; fxStart = millis(); ledsDirty = true; }
+  if (id == 'A') { motorGame(0, dir, pwm); energy = e; if (fx != FX_ENERGY) { fx = FX_ENERGY; fxStart = millis(); } ledsDirty = true; }
+  else if (id == 'B') { motorGame(1, dir, pwm); energy = e; if (fx != FX_ENERGY) { fx = FX_ENERGY; fxStart = millis(); } ledsDirty = true; }
 }
 
 void loop() {
@@ -200,8 +204,8 @@ void loop() {
   }
   if (fx == 7 && nowMs - fxStart > 300) { fx = 0; ledsDirty = true; }
   if (flashUntil && nowMs >= flashUntil) { flashUntil = 0; ledsDirty = true; } // 閃完補畫一幀回原顯示
-  // 動態特效/紅色脈動/閃爍中連續刷新(40ms)；靜態只在有變時輸出(100ms 節流)。show 關中斷會掉序列字，不能太密。
-  bool anim = fxAnimated(fx) || (urgent && fx == FX_ENERGY) || flashUntil;
+  // 動態特效/紅色脈動/FEVER/閃爍中連續刷新(40ms)；靜態只在有變時輸出(100ms 節流)。show 關中斷會掉序列字，不能太密。
+  bool anim = fxAnimated(fx) || ((urgent || fever) && fx == FX_ENERGY) || flashUntil;
   if ((ledsDirty || anim) && nowMs - lastShow > (unsigned long)(anim ? 40 : 100)) {
     showStrip(); ledsDirty = false; lastShow = nowMs;
   }

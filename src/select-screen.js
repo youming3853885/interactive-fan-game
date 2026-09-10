@@ -31,7 +31,7 @@ export function createSelectScreen(hud, onPick) {
     <div class="ss-meta">
       <div class="ss-title" id="ssTitle"></div>
       <div class="ss-sub" id="ssSub"></div>
-      <div class="ss-info"><span id="ssBpm"></span><span class="ss-stars" id="ssStars"></span></div>
+      <div class="ss-info"><span id="ssBpm"></span><span class="ss-stars" id="ssStars"></span><span class="ss-diff" id="ssDiff"></span></div>
       <div class="ss-len">遊戲長度
         <span class="ss-seg"><button data-len="chorus">60秒副歌</button><button data-len="2" class="on">2 分鐘</button><button data-len="F">完整曲</button></span>
         <span class="ss-dur" id="ssDur"></span>
@@ -113,6 +113,11 @@ export function createSelectScreen(hud, onPick) {
     $('ssBpm').textContent = t.bpm ? `${t.bpm} BPM` : '';
     const stars = bpmToStars(t.bpm);
     $('ssStars').textContent = stars ? `難度 ${starString(stars)}` : '';
+    // 小學生看得懂的難度字（星星的白話版）
+    const diff = !stars ? null : stars <= 2 ? ['簡單', '#8ff0bb'] : stars === 3 ? ['中等', '#ffe9a8'] : ['困難', '#ffb3a0'];
+    const dEl = $('ssDiff');
+    if (diff) { dEl.textContent = diff[0]; dEl.style.color = diff[1]; dEl.style.borderColor = diff[1] + '88'; dEl.style.display = ''; }
+    else dEl.style.display = 'none';
     $('ssDots').innerHTML = tracks.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('');
     if (playing) startPreview();
     showDuration();
@@ -225,6 +230,7 @@ function injectStyle() {
   .ss-info{margin-top:10px;display:flex;gap:18px;justify-content:center;font-size:16px;}
   .ss-info #ssBpm{color:#4ec3ff;font-weight:700;}
   .ss-stars{color:#ffd76b;letter-spacing:2px;}
+  .ss-diff{padding:2px 12px;border-radius:999px;border:1px solid #ffffff44;font-weight:900;font-size:14px;}
   .ss-controls{margin-top:22px;display:flex;gap:14px;align-items:center;justify-content:center;}
   .ss-btn{border:none;cursor:pointer;border-radius:999px;font-weight:700;font-size:16px;padding:12px 22px;}
   .ss-preview{background:#ffffff14;color:#fff;border:1px solid #ffffff2e;}

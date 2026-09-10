@@ -1,9 +1,9 @@
 import { circleStep, newCircleState, createArmPicker } from './motion.js';
 import { CONFIG, fanRun } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
-import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
+import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeForProgress, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, FX } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, FX } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader } from './pose.js';
 import { createUI } from './ui.js';
@@ -95,7 +95,7 @@ function showControls(v) {
 }
 
 // ---- 遊戲狀態 ----
-const READY_NEED = 5;
+const READY_NEED = 2; // 就位縮短：2 秒就位 → 4 秒熱身圈（用玩的教，不罰站）
 let phase = 'loading';
 let mode = 'dual';
 let media = null;
@@ -150,11 +150,17 @@ function startReady() {
   phase = 'ready';
 }
 
+function startWarmup() { phase = 'warmup'; warmupEnd = performance.now() + 4000; }
+
 // 滿條門檻＝依譜面精算理論滿分 × 0.7 校正（玩得不錯就能看到接近滿條）
 function barFullScore() {
   return Math.max(1, Math.round(maxScoreForChart(chart, bpm, SCORE_CFG) * BAR_FULL_RATIO));
 }
 let urgentSent = false; // 最後 10 秒紅色模式只送一次
+let warmupEnd = 0;      // 熱身圈結束時間
+// FEVER：任一玩家能量條滿 → 10 秒狂熱（分數×2、燈條彩虹）；結束後該玩家條歸零再衝
+const feverBase = { S: 0, A: 0, B: 0 };
+let feverUntil = 0, feverKey = '', feverPrev = false;
 
 function startPlaying() {
   const t = media.tracks[selectedIdx];
@@ -166,6 +172,8 @@ function startPlaying() {
   chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
   maxScore = barFullScore(); // 滿條基準（畫面能量條與燈條共用）
   urgentSent = false;
+  feverBase.S = 0; feverBase.A = 0; feverBase.B = 0;
+  feverUntil = 0; feverKey = ''; feverPrev = false;
   scoreA = newScore();
   scoreB = newScore();
   ended = false;
@@ -189,6 +197,7 @@ let lastStopPhase = ''; // 記住上次在哪個閒置階段送過停止，避�
 function sendStop() {
   sender.send(formatCommand({ dir: 'S', pwm: 0, energy: 0 }, { dir: 'S', pwm: 0, energy: 0 })).catch(() => {});
   sender.send(urgentLine(false)).catch(() => {}); // 一併解除倒數紅色模式
+  sender.send(feverLine(false)).catch(() => {});  // 一併解除 FEVER 燈效
 }
 
 async function boot() {
@@ -283,15 +292,21 @@ async function loop(pose) {
       const inTgt = ui.handInTarget(handS);
       readyState.A = { ...updateHold(readyState.A.hold, inTgt, dt, READY_NEED) };
       ui.drawReadySingle({ need: READY_NEED, hold: readyState.A.hold, ready: readyState.A.ready, hand: handS });
-      if (readyState.A.ready) startPlaying();
+      if (readyState.A.ready) startWarmup();
     } else {
       const hitA = ui.boxHit(handA, 'A'), hitB = ui.boxHit(handB, 'B');
       readyState.A = { ...updateHold(readyState.A.hold, hitA, dt, READY_NEED) };
       readyState.B = { ...updateHold(readyState.B.hold, hitB, dt, READY_NEED) };
       ui.drawReady({ need: READY_NEED, A: { hand: handA, hold: readyState.A.hold, ready: readyState.A.ready }, B: { hand: handB, hold: readyState.B.hold, ready: readyState.B.ready } });
-      if (readyState.A.ready && readyState.B.ready) startPlaying();
+      if (readyState.A.ready && readyState.B.ready) startWarmup();
     }
     if (lastStopPhase !== 'ready') { sendStop(); lastStopPhase = 'ready'; }
+  } else if (phase === 'warmup') {
+    // 熱身圈：幽靈星星示範、玩家跟著轉，倒數完直接開場
+    ui.drawWarmup(mode === 'single'
+      ? { mode, left: (warmupEnd - now) / 1000, hand: handS }
+      : { mode, left: (warmupEnd - now) / 1000, A: handA, B: handB });
+    if (now >= warmupEnd) startPlaying();
   } else if (phase === 'playing') {
     lastStopPhase = ''; // 離開閒置：下次回選歌時會再停一次
     const elapsed = (performance.now() - startTime) / 1000;
@@ -301,7 +316,9 @@ async function loop(pose) {
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
     if (mvAnalyser) mvAnalyser.getByteFrequencyData(mvFreq); // 取 MV 即時頻譜
     const dirSign = segDir === 'R' ? -1 : 1;
-    const progOf = (st) => Math.min(100, st.score / maxScore * 100); // 燈條=分數進度（與畫面能量條同一百分比）
+    const feverOn = performance.now() < feverUntil;
+    // 燈條/畫面條=分數進度（FEVER 結束後從 feverBase 重新起算）
+    const progOf = (st, key) => Math.min(100, (st.score - feverBase[key]) / maxScore * 100);
     const endRound = (result, win) => {
       ended = true; phase = 'victory'; victoryResult = result; mvVideo.pause(); sfx.fanfare(win);
       // 勝利畫面 10 秒：煙火特效；雙人不論誰贏 P2 風扇續轉 10 秒、單人即停。
@@ -334,7 +351,7 @@ async function loop(pose) {
           const avg = st.oN ? st.oSum / st.oN : 0; st.oSum = 0; st.oN = 0;
           const { judge: j, pace } = judgeBySpeed(avg, bpm, SCORE_CFG);
           st.combo += 1;
-          const pts = revScore(st.combo, j, SCORE_CFG); st.score += pts;
+          const pts = revScore(st.combo, j, SCORE_CFG) * (feverOn ? 2 : 1); st.score += pts; // FEVER 中分數×2
           const mult = comboMultiplier(st.combo, SCORE_CFG);
           const leveled = mult > st.mult; st.mult = mult;
           ui.judge(j, pts, mult, cx, cy, color, pace);
@@ -348,30 +365,51 @@ async function loop(pose) {
       }
       return { markerAngle: st.mAng, active: st.active };
     };
+    const feverState = { on: feverOn, left: Math.max(0, Math.ceil((feverUntil - performance.now()) / 1000)) };
     if (mode === 'single') {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
       // 殘缺版：P2 風扇整場固定轉；燈條送分數進度
-      const fan = fanRun(CONFIG); const e = progOf(scoreS);
+      const fan = fanRun(CONFIG); const e = progOf(scoreS, 'S');
       sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fan, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
-        hand: handS, active: m.active });
-      if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeFor(scoreS.score, roundSec, bpm, SCORE_CFG) }, true);
+        hand: handS, active: m.active, frac: e / 100, fever: feverState });
+      if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeForProgress(scoreS.score, maxScore) }, true);
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
       const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
       // 殘缺版：只有 P2 風扇；A 送 1P 進度、B 送 2P 進度（單條燈後到的 B 蓋前面 → 顯示 2P）
       const fan = fanRun(CONFIG);
-      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: progOf(scoreA) }, { ...fan, energy: progOf(scoreB) })).catch(() => {});
+      const eA = progOf(scoreA, 'A'), eB = progOf(scoreB, 'B');
+      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: eA }, { ...fan, energy: eB })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
-        barStyle: settings.barStyle,
-        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active },
-        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active } });
+        barStyle: settings.barStyle, fever: feverState,
+        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active, frac: eA / 100 },
+        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active, frac: eB / 100 } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);
       }
     }
+    // FEVER 觸發/收尾：任一玩家條滿 → 開 10 秒；結束 → 該玩家條歸零、燈條退回進度顯示
+    if (feverPrev && !feverOn) {
+      const st = feverKey === 'S' ? scoreS : feverKey === 'A' ? scoreA : scoreB;
+      if (feverKey) feverBase[feverKey] = st.score;
+      feverKey = '';
+      sender.send(feverLine(false)).catch(() => {});
+    }
+    if (!feverOn && !feverPrev && !ended) {
+      const cands = mode === 'single' ? [['S', scoreS]] : [['A', scoreA], ['B', scoreB]];
+      for (const [k, st] of cands) {
+        if (progOf(st, k) >= 100) {
+          feverUntil = performance.now() + 10000; feverKey = k;
+          sfx.fanfare(true);
+          sender.send(feverLine(true)).catch(() => {});
+          break;
+        }
+      }
+    }
+    feverPrev = performance.now() < feverUntil;
     // 最後 10 秒：燈條進度條變紅+脈動（只送一次）
     if (timeLeft <= 10 && !urgentSent) { urgentSent = true; sender.send(urgentLine(true)).catch(() => {}); }
     // 倒數滴答（最後 10 秒每秒一聲，最後 3 秒更急）

@@ -26,6 +26,8 @@ export function createUI(canvas) {
   const gradeImgs = {};
   for (const g of ['S', 'A', 'B', 'C']) { gradeImgs[g] = new Image(); gradeImgs[g].src = import.meta.env.BASE_URL + `grades/grade-${g.toLowerCase()}.webp`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
+  let ghostAng = -Math.PI / 2;                   // 幽靈領航星的軌道角度（以目標速率前進）
+  let prevLeader = null;                         // 雙人領先者（反超偵測）
 
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
   const bursts = [];
@@ -199,9 +201,28 @@ export function createUI(canvas) {
       ctx.globalAlpha = b.life; ctx.fillStyle = b.color;
       ctx.font = `900 ${Math.round(canvas.height * 0.08)}px system-ui`;
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(`COMBO x${b.mult}!`, b.x, b.y);
+      ctx.fillText(b.text || `COMBO x${b.mult}!`, b.x, b.y);
       ctx.globalAlpha = 1;
     }
+  }
+  // 幽靈領航星：以目標速率繞軌道轉，玩家追著它＝在 PERFECT 區
+  function drawGhost(cx, cy, R) {
+    const H = canvas.height;
+    const gx = cx + R * Math.cos(ghostAng), gy = cy + R * Math.sin(ghostAng);
+    ctx.save(); ctx.globalAlpha = 0.75;
+    ctx.shadowColor = gold; ctx.shadowBlur = 26;
+    starPath(gx, gy, H * 0.034);
+    ctx.fillStyle = gold; ctx.fill();
+    ctx.restore();
+  }
+  // 皇冠（canvas 畫，不用 emoji）
+  function drawCrown(cx, cy, s) {
+    ctx.save(); ctx.fillStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 14;
+    ctx.beginPath();
+    ctx.moveTo(cx - s, cy); ctx.lineTo(cx - s, cy - s * 0.55); ctx.lineTo(cx - s * 0.5, cy - s * 0.2);
+    ctx.lineTo(cx, cy - s * 0.85); ctx.lineTo(cx + s * 0.5, cy - s * 0.2); ctx.lineTo(cx + s, cy - s * 0.55);
+    ctx.lineTo(cx + s, cy); ctx.closePath(); ctx.fill();
+    ctx.restore();
   }
   function flash(color) {
     ctx.save(); ctx.globalAlpha = 0.25; ctx.fillStyle = color;
@@ -334,6 +355,22 @@ export function createUI(canvas) {
       ctx.save(); roundRectPath(x, y, w, h, h * 0.5); ctx.fillStyle = '#0a0e1ad9'; ctx.fill();
       ctx.fillStyle = o.color || '#5bd6ff'; ctx.fillRect(x + h * 0.2, y + h * 0.3, (w - h * 0.4) * frac, h * 0.4); ctx.restore();
     }
+    // 評級刻度線 B/A/S：評級=條的高度，看條就知道拿什麼（單人用）
+    if (o.ticks && img.complete && img.naturalWidth) {
+      const meta2 = BAR_META[style];
+      const chXL = x + w * meta2.chXL, chXR = x + w * meta2.chXR;
+      const chY = y + h * meta2.chYT, chH = h * (meta2.chYB - meta2.chYT);
+      for (const t of o.ticks) {
+        const tx = chXL + Math.min(0.99, t.f) * (chXR - chXL);
+        ctx.save();
+        ctx.strokeStyle = '#ffffff88'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(tx, chY - h * 0.06); ctx.lineTo(tx, chY + chH + h * 0.06); ctx.stroke();
+        ctx.fillStyle = t.col; ctx.shadowColor = t.col; ctx.shadowBlur = 10;
+        ctx.font = `900 ${Math.round(h * 0.30)}px system-ui`; ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+        ctx.fillText(t.g, tx, y + h + h * 0.34);
+        ctx.restore();
+      }
+    }
     // 玩家色外框光暈（雙人辨識 A/B）
     if (o.color) {
       ctx.save(); ctx.strokeStyle = o.color; ctx.lineWidth = Math.max(2, h * 0.05);
@@ -459,7 +496,7 @@ export function createUI(canvas) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
     drawDivider();
-    centerText('兩位玩家站定位，把手放進方塊維持 5 秒開始', 0.08, 0.035, '#fff');
+    centerText('兩位玩家站定位，把手放進方塊維持 2 秒開始', 0.08, 0.035, '#fff');
     for (const [side, color] of [['A', colorA], ['B', colorB]]) {
       const s = state[side];
       const box = boxFor(side, W, H);
@@ -513,7 +550,7 @@ export function createUI(canvas) {
     const W = canvas.width, H = canvas.height;
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = 'rgba(4,5,12,0.55)'; ctx.fillRect(0, 0, W, H);
-    centerText('把一隻手放進中央圈圈，維持 5 秒開始', 0.10, 0.034, '#fff');
+    centerText('把一隻手放進中央圈圈，維持 2 秒開始', 0.10, 0.034, '#fff');
 
     const t = singleTargets(), cx = t.C.x, cy = t.C.y, inTgt = handInTarget(state.hand);
     // 目標圈
@@ -546,9 +583,31 @@ export function createUI(canvas) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
   }
 
+  // 熱身圈：就位後 4 秒，幽靈星星示範畫圈、玩家跟著轉，倒數完直接開場（用玩的教，不罰站）
+  function drawWarmup(state) {
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = 'rgba(4,5,12,0.55)'; ctx.fillRect(0, 0, W, H);
+    ghostAng += 3.2 / 60; // 示範轉速
+    centerText('熱身！跟著小星星轉圈圈', 0.10, 0.04, '#8ff0bb');
+    const spots = state.mode === 'single'
+      ? [[W * 0.5, H * 0.44, Math.min(W, H) * 0.28, state.hand, colorA]]
+      : [[W * 0.25, H * 0.44, Math.min(W, H) * 0.22, state.A, colorA], [W * 0.75, H * 0.44, Math.min(W, H) * 0.22, state.B, colorB]];
+    for (const [cx, cy, R, hand, color] of spots) {
+      ctx.save(); ctx.setLineDash([12, 10]); ctx.strokeStyle = '#ffffff55'; ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.arc(cx, cy, R, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
+      drawGhost(cx, cy, R);
+      drawHand(hand, color);
+    }
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#dfe4ff'; ctx.font = `700 ${Math.round(H * 0.03)}px system-ui`;
+    ctx.fillText(`${Math.max(0, Math.ceil(state.left))} 秒後音樂開始`, W / 2, H * 0.86);
+  }
+
   const api = {
     drawReady,
     drawReadySingle,
+    drawWarmup,
     handInTarget,
     judge,
     clear,
@@ -564,18 +623,34 @@ export function createUI(canvas) {
       if (state.mode !== 'single') drawDivider(); // 單人不分左右
       const spin = Math.max(3.5, state.guideOmega || 0); // rad/s，至少看得到在轉
       guidePhase = (guidePhase + spin / 60) % (Math.PI * 2);
+      // 幽靈領航星：以「目標速率」沿當前段落方向前進；休息段暫停
+      const gSign = state.segDir === 'R' ? -1 : 1;
+      if (state.segDir === 'F' || state.segDir === 'R') ghostAng += gSign * (state.guideOmega || 0) / 60;
       const gFrac = (s) => Math.max(0, Math.min(1, s / (state.maxScore || 3000)));
+      const TICKS = [{ f: 0.45, g: 'B', col: '#5ec8ff' }, { f: 0.75, g: 'A', col: '#c99cff' }, { f: 1, g: 'S', col: gold }];
       const maxMult = state.mode === 'single' ? state.comboMult : Math.max(state.A.comboMult, state.B.comboMult);
       drawFrameEq(state.spectrum, maxMult); // 上下點陣音波外框（畫在最底，HUD 文字疊其上）
       drawSchool();                                                        // 校名（最上層之一）
       drawClock(W / 2, H * 0.11, Math.max(0, Math.ceil(state.timeLeft))); // 遊戲式電子鐘
       drawNextHint(state.nextDir, state.nextIn);                           // 右上：下一個
+      // 休息段中央文字（甩甩手＋下一段預告）
+      const restText = (cx, cy, R) => {
+        if (state.segDir !== 'S') return;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#8ff0bb'; ctx.shadowColor = '#8ff0bb'; ctx.shadowBlur = 16;
+        ctx.font = `900 ${Math.round(H * 0.06)}px system-ui`;
+        ctx.fillText(`休息 ${Math.max(0, Math.ceil(state.nextIn))}`, cx, cy + R * 0.78);
+        ctx.shadowBlur = 0; ctx.fillStyle = '#dfe4ff'; ctx.font = `700 ${Math.round(H * 0.028)}px system-ui`;
+        ctx.fillText(`甩甩手～下一段：${state.nextDir === 'R' ? '反轉' : '正轉'}`, cx, cy + R * 1.0);
+      };
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
+        if (state.segDir !== 'S') drawGhost(cx, cy, R); // 幽靈領航星
         drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R); // 跟手方向+吸附圓軌
+        restText(cx, cy, R);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
-          frac: gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false });
+          frac: state.frac ?? gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false, ticks: TICKS });
         if (state.comboMult > prevCombo.S) { triggerBurst(cx, cy, gold, state.comboMult); flash(colorA); }
         prevCombo.S = state.comboMult;
       } else {
@@ -583,13 +658,51 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
+          if (state.segDir !== 'S') drawGhost(cx, cy, R);
           drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R);
+          restText(cx, cy, R);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
-            frac: gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
+            frac: state[side].frac ?? gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
             label: '', showLR: false });
           if (state[side].comboMult > prevCombo[side]) { triggerBurst(cx, cy, color, state[side].comboMult); flash(color); }
           prevCombo[side] = state[side].comboMult;
         }
+        // 領先者皇冠 + 反超偵測
+        const leader = state.A.score > state.B.score ? 'A' : state.B.score > state.A.score ? 'B' : null;
+        if (leader) drawCrown(W * (leader === 'A' ? 0.26 : 0.74), H * 0.795, H * 0.028);
+        if (leader && prevLeader && leader !== prevLeader) {
+          bursts.push({ x: W / 2, y: H * 0.3, color: gold, text: '反超！', life: 1 });
+          flash(leader === 'A' ? colorA : colorB);
+        }
+        if (leader) prevLeader = leader;
+      }
+      // 反轉預告：換方向前 2 秒大字提醒
+      if (state.nextDir && state.nextDir !== 'S' && state.segDir !== 'S' && state.nextDir !== state.segDir && state.nextIn <= 2) {
+        const pulse = 1 + 0.08 * Math.sin(guidePhase * 8);
+        ctx.save(); ctx.translate(W / 2, H * 0.26); ctx.scale(pulse, pulse);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `900 ${Math.round(H * 0.06)}px system-ui`;
+        ctx.lineWidth = 8; ctx.strokeStyle = '#05070f'; ctx.strokeText('要反轉囉！', 0, 0);
+        ctx.fillStyle = '#ff8a70'; ctx.shadowColor = '#ff5a3c'; ctx.shadowBlur = 22; ctx.fillText('要反轉囉！', 0, 0);
+        ctx.restore();
+      }
+      // FEVER 狂熱：彩虹邊框 + 大字 + ×2 提示
+      if (state.fever && state.fever.on) {
+        const hue = Math.round((guidePhase * 240) % 360);
+        ctx.save(); ctx.lineWidth = H * 0.016;
+        ctx.strokeStyle = `hsl(${hue},100%,60%)`; ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur = 30;
+        ctx.strokeRect(H * 0.012, H * 0.012, W - H * 0.024, H - H * 0.024);
+        ctx.restore();
+        const pulse = 1 + 0.1 * Math.sin(guidePhase * 6);
+        ctx.save(); ctx.translate(W / 2, H * 0.30); ctx.rotate(-0.06); ctx.scale(pulse, pulse);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = `900 ${Math.round(H * 0.1)}px system-ui`;
+        ctx.lineWidth = 10; ctx.strokeStyle = '#05070f'; ctx.strokeText('FEVER!!', 0, 0);
+        ctx.fillStyle = `hsl(${hue},100%,65%)`; ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur = 28;
+        ctx.fillText('FEVER!!', 0, 0); ctx.restore();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = gold; ctx.font = `900 ${Math.round(H * 0.04)}px system-ui`;
+        ctx.fillText(`分數 ×2　剩 ${state.fever.left} 秒`, W / 2, H * 0.38);
       }
       for (let i = particles.length - 1; i >= 0; i--) {
         const p = particles[i]; p.x += p.vx; p.y += p.vy; p.vx *= 0.96; p.vy *= 0.96; p.life -= 0.03;

@@ -32,6 +32,11 @@ export function urgentLine(on) {
   return `U,${on ? 1 : 0}\n`;
 }
 
+// FEVER 狂熱模式：燈條改全彩流動（韌體 V 旗標，優先於紅色模式）
+export function feverLine(on) {
+  return `V,${on ? 1 : 0}\n`;
+}
+
 // Nano 內建 LED(D13)測試指令：'T,1\n'(亮)/'T,0\n'(暗)。用來驗證網頁↔Nano 序列通訊是否正常。
 export function builtinLedLine(on) {
   return `T,${on ? 1 : 0}\n`;

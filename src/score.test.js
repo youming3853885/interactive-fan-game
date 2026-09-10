@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { SCORE_CFG, targetOmegaFor, comboMultiplier, judgeBySpeed, revScore, higherScore, gradeFor, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
+import { SCORE_CFG, targetOmegaFor, comboMultiplier, judgeBySpeed, revScore, higherScore, gradeForProgress, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
 import { chartFromBpm } from './chart.js';
 
 describe('maxScoreForChart（依譜面精算理論滿分）', () => {
@@ -69,10 +69,12 @@ describe('higherScore', () => {
   });
 });
 
-describe('gradeFor', () => {
-  it('分數越高評級越好', () => {
-    const roundSec = 120, bpm = 120;
-    expect(gradeFor(0, roundSec, bpm, SCORE_CFG)).toBe('C');
-    expect(gradeFor(999999, roundSec, bpm, SCORE_CFG)).toBe('S');
+describe('gradeForProgress（評級=能量條同一套語言）', () => {
+  it('滿條 S、75% A、45% B、以下 C', () => {
+    expect(gradeForProgress(10000, 10000)).toBe('S');
+    expect(gradeForProgress(7500, 10000)).toBe('A');
+    expect(gradeForProgress(4500, 10000)).toBe('B');
+    expect(gradeForProgress(4400, 10000)).toBe('C');
+    expect(gradeForProgress(99999, 10000)).toBe('S'); // 超過滿條(FEVER 後)仍是 S
   });
 });

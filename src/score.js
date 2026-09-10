@@ -54,14 +54,13 @@ export function higherScore(a, b) {
   return null;
 }
 
-// 評級：依實際分數 / 該局理想分數 的比例
-export function gradeFor(score, roundSec, bpm, cfg) {
-  const idealRevTime = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
-  const expectedRevs = roundSec / idealRevTime;
-  const expected = cfg.sGood * Math.max(1, expectedRevs); // 基準（combo 1x、全 GOOD）
-  const ratio = score / expected;
-  if (ratio >= 2.2) return 'S';
-  if (ratio >= 1.4) return 'A';
-  if (ratio >= 0.7) return 'B';
+// 評級=能量條同一套語言：滿條(=BAR_FULL_RATIO×理論滿分)即 S、75% A、45% B、其他 C。
+// 玩家看條的刻度線就知道自己會拿什麼，結算不再與條打架。
+export const GRADE_TICKS = [{ f: 0.45, g: 'B' }, { f: 0.75, g: 'A' }, { f: 1, g: 'S' }];
+export function gradeForProgress(score, barFull) {
+  const r = score / Math.max(1, barFull);
+  if (r >= 1) return 'S';
+  if (r >= 0.75) return 'A';
+  if (r >= 0.45) return 'B';
   return 'C';
 }

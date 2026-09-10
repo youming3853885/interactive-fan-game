@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, FX } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, FX } from './protocol.js';
 
 describe('judgeFlashLine（得分閃爍疊加層）', () => {
   it('PERFECT → 金閃 J,D,1', () => {
@@ -17,6 +17,13 @@ describe('urgentLine（最後倒數紅色模式）', () => {
   it('開 → U,1；關 → U,0', () => {
     expect(urgentLine(true)).toBe('U,1\n');
     expect(urgentLine(false)).toBe('U,0\n');
+  });
+});
+
+describe('feverLine（FEVER 燈條全彩流動）', () => {
+  it('開 → V,1；關 → V,0', () => {
+    expect(feverLine(true)).toBe('V,1\n');
+    expect(feverLine(false)).toBe('V,0\n');
   });
 });
 

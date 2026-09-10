@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>遊戲性優化 mockup — 6 項提案</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #06060c; color: #fff; font-family: "Microsoft JhengHei", sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9aa3c0; font-size: 13px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1240px; }
+  .card { border: 1px solid #fff2; border-radius: 14px; overflow: hidden; background: #0d0d16; }
+  .card h2 { font-size: 15px; padding: 10px 14px; background: #16162a; }
+  .card h2 .n { display: inline-block; width: 22px; height: 22px; border-radius: 50%; background: #2b7bff;
+    text-align: center; line-height: 22px; font-size: 13px; margin-right: 8px; }
+  .scene { position: relative; height: 300px; background: radial-gradient(ellipse at 50% 35%, #241740 0%, #0e0820 60%, #070510 100%); overflow: hidden; }
+  .cap { padding: 10px 14px; font-size: 13px; color: #b9c2e8; line-height: 1.6; }
+
+  .orbit { position: absolute; left: 50%; top: 50%; width: 190px; height: 190px; border: 2.5px dashed #ffffff2e; border-radius: 50%; transform: translate(-50%,-50%); }
+  .hand { position: absolute; width: 18px; height: 18px; border-radius: 50%; background: #2b7bff; box-shadow: 0 0 16px #2b7bffdd, 0 0 34px #2b7bff66; }
+  .trail { position: absolute; width: 10px; height: 10px; border-radius: 50%; background: #2b7bff88; filter: blur(1px); }
+
+  /* 1 幽靈領航 */
+  @keyframes ghostSpin { from { transform: rotate(0deg) translateX(95px); } to { transform: rotate(360deg) translateX(95px); } }
+  .ghostWrap { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+  .ghost { position: absolute; margin: -16px; width: 32px; height: 32px; animation: ghostSpin 2.2s linear infinite; }
+  .ghost svg { filter: drop-shadow(0 0 10px #ffe36e); opacity: .75; }
+  .ghostTip { position: absolute; left: 50%; top: 12%; transform: translateX(-50%); background: #ffe36e22; border: 1px solid #ffe36e88;
+    color: #ffe9a8; font-weight: 900; padding: 4px 14px; border-radius: 999px; font-size: 14px; }
+
+  /* 2 FEVER */
+  @keyframes rainbowShift { from { background-position: 0 0; } to { background-position: 300px 0; } }
+  .feverFrame { position: absolute; inset: 0; border: 10px solid transparent;
+    border-image: linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00) 1; animation: rainbowShift 1s linear infinite; opacity: .85; }
+  .feverWord { position: absolute; left: 50%; top: 34%; transform: translate(-50%,-50%) rotate(-4deg);
+    font-size: 58px; font-weight: 900; letter-spacing: 4px;
+    background: linear-gradient(90deg,#ff5a5a,#ffd24a,#6eff8a,#5ec8ff,#c99cff); -webkit-background-clip: text; background-clip: text; color: transparent;
+    filter: drop-shadow(0 0 18px #ffd24a88); }
+  .x2 { position: absolute; left: 50%; top: 52%; transform: translateX(-50%); font-size: 26px; font-weight: 900; color: #ffd24a; text-shadow: 0 0 14px #ffd24a; }
+  .fbar { position: absolute; left: 10%; right: 10%; bottom: 28px; height: 16px; border-radius: 8px; border: 1px solid #fff5;
+    background: linear-gradient(90deg,#f00,#ff0,#0f0,#0ff,#00f,#f0f,#f00); background-size: 300px 100%; animation: rainbowShift .8s linear infinite; }
+  .ftime { position: absolute; right: 10%; bottom: 50px; font-size: 14px; font-weight: 700; color: #ffe9a8; }
+
+  /* 3 combo 風險 */
+  .comboBadge { position: absolute; left: 50%; top: 36%; transform: translate(-50%,-50%); text-align: center; }
+  .mult { font-size: 64px; font-weight: 900; color: #ffd24a; text-shadow: 0 0 24px #ffd24a88; }
+  .multWarn { font-size: 15px; font-weight: 900; color: #ff8a70; background: #ff5a3c22; border: 1px solid #ff8a70aa;
+    padding: 4px 12px; border-radius: 999px; margin-top: 8px; display: inline-block; }
+  .shield { display: flex; gap: 6px; justify-content: center; margin-top: 10px; }
+  .pip { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #ffd24a; }
+  .pip.lost { border-color: #666; background: #333; }
+  .pip.full { background: #ffd24a; }
+
+  /* 4 評級對齊 */
+  .gbarWrap { position: absolute; left: 8%; right: 8%; top: 44%; }
+  .gbar { height: 22px; border-radius: 11px; border: 1px solid #fff5; background: #111; overflow: hidden; position: relative; }
+  .gfill { width: 78%; height: 100%; background: linear-gradient(90deg,#2b7bff,#00e5ff); }
+  .tick { position: absolute; top: -6px; bottom: -6px; width: 2px; background: #ffffff66; }
+  .tickLab { position: absolute; top: 30px; transform: translateX(-50%); font-size: 15px; font-weight: 900; }
+  .now { position: absolute; top: -34px; left: 78%; transform: translateX(-50%); font-size: 13px; font-weight: 900; color: #c99cff;
+    background: #c99cff22; border: 1px solid #c99cff88; border-radius: 999px; padding: 2px 10px; white-space: nowrap; }
+
+  /* 5 熱身圈 */
+  .readyBig { position: absolute; left: 50%; top: 22%; transform: translateX(-50%); font-size: 24px; font-weight: 900; color: #8ff0bb; }
+  .countPill { position: absolute; left: 50%; top: 76%; transform: translateX(-50%); background: #ffffff14; border: 1px solid #fff3;
+    padding: 6px 16px; border-radius: 999px; font-size: 14px; font-weight: 700; color: #dfe4ff; }
+
+  /* 6 小順手 */
+  .mini { position: absolute; border-radius: 10px; background: #ffffff0d; border: 1px solid #fff2; padding: 10px; }
+  .flipArrow { font-size: 40px; font-weight: 900; color: #ff8a70; text-shadow: 0 0 16px #ff5a3c; }
+  .crown { font-size: 22px; color: #ffd24a; text-shadow: 0 0 10px #ffd24a; }
+  .diffPill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 12px; font-weight: 900; margin-right: 4px; }
+</style>
+</head>
+<body>
+<h1>遊戲性優化 mockup — 6 項提案一次看</h1>
+<div class="sub">每張卡＝一個提案的遊戲畫面示意（動畫會動的就是實作後的樣子）。</div>
+
+<div class="grid">
+  <div class="card">
+    <h2><span class="n">1</span>幽靈領航員 — 把「配速」變成「追星星」</h2>
+    <div class="scene">
+      <div class="orbit"></div>
+      <div class="ghostWrap"><div class="ghost">
+        <svg width="32" height="32" viewBox="0 0 32 32"><path d="M16 2l3.6 8.2 8.9.8-6.7 5.9 2 8.7L16 21l-7.8 4.6 2-8.7-6.7-5.9 8.9-.8z" fill="#ffe36e"/></svg>
+      </div></div>
+      <div class="hand" style="left:31%;top:63%;"></div>
+      <div class="trail" style="left:27%;top:69%;"></div><div class="trail" style="left:24%;top:74%;width:7px;height:7px;"></div>
+      <div class="ghostTip">跟著小星星轉！</div>
+    </div>
+    <div class="cap">半透明小星星以「目標速率」繞軌道轉，玩家追著它跑：追上=PERFECT 區、落後/超車立刻看得出來。取代事後才知道的太快/太慢試錯。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">2</span>FEVER 狂熱模式 — 能量條滿的爆點</h2>
+    <div class="scene">
+      <div class="feverFrame"></div>
+      <div class="feverWord">FEVER!!</div>
+      <div class="x2">分數 ×2</div>
+      <div class="ftime">剩 7 秒</div>
+      <div class="fbar"></div>
+    </div>
+    <div class="cap">能量條滿 → 10 秒狂熱：畫面彩虹邊框、燈條全彩流動、風扇短暫增強（韌體限時保護內）、得分×2。結束後能量條歸零重新累積，一場可以爆好幾次。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">3</span>倍率保衛戰 — 給 combo 一點風險</h2>
+    <div class="scene">
+      <div class="comboBadge">
+        <div class="mult">×4</div>
+        <div class="shield"><span class="pip full"></span><span class="pip lost"></span></div>
+        <div class="multWarn">再一圈 GOOD 就降級！</div>
+      </div>
+    </div>
+    <div class="cap">倍率下面兩顆「護盾點」：一圈 GOOD 掉一顆、連兩圈 GOOD 倍率降一級（不歸零）；PERFECT 補回護盾。有失去的可能，保倍率變成持續的小目標。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">4</span>評級對齊能量條 — 看條就知道拿什麼</h2>
+    <div class="scene">
+      <div class="gbarWrap">
+        <div class="now">現在：A！再衝就是 S</div>
+        <div class="gbar"><div class="gfill"></div></div>
+        <div class="tick" style="left:45%;"></div><div class="tickLab" style="left:45%;color:#5ec8ff;">B</div>
+        <div class="tick" style="left:75%;"></div><div class="tickLab" style="left:75%;color:#c99cff;">A</div>
+        <div class="tick" style="left:99%;"></div><div class="tickLab" style="left:99%;color:#ffd24a;">S</div>
+      </div>
+    </div>
+    <div class="cap">能量條上直接標 B/A/S 刻度線，評級=條的高度（滿=S、75%=A、45%=B）。玩家隨時知道離下一級多遠，結算不再有「條很滿卻拿 B」的困惑。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">5</span>熱身圈開場 — 用玩的教，不用罰站等</h2>
+    <div class="scene">
+      <div class="readyBig">熱身！跟著星星轉一圈就開始</div>
+      <div class="orbit"></div>
+      <div class="ghostWrap"><div class="ghost" style="animation-duration:3s;">
+        <svg width="32" height="32" viewBox="0 0 32 32"><path d="M16 2l3.6 8.2 8.9.8-6.7 5.9 2 8.7L16 21l-7.8 4.6 2-8.7-6.7-5.9 8.9-.8z" fill="#8ff0bb"/></svg>
+      </div></div>
+      <div class="hand" style="left:60%;top:30%;"></div>
+      <div class="countPill">就位 2 秒 → 熱身圈 → 音樂開始</div>
+    </div>
+    <div class="cap">就位縮到 2 秒，接著幽靈星星示範轉一圈、玩家跟著轉完就開場。第一個學到的動作就是「畫圈」本身，展場排隊也更快。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="n">6</span>小順手包 — 預告/休息/皇冠/難度字</h2>
+    <div class="scene">
+      <div class="mini" style="left:6%;top:8%;width:42%;text-align:center;">
+        <div class="flipArrow">⟲→⟳</div>
+        <div style="font-size:13px;font-weight:900;color:#ffb3a0;">要反轉囉！(前 2 秒大預告+語音)</div>
+      </div>
+      <div class="mini" style="right:6%;top:8%;width:40%;text-align:center;">
+        <div style="font-size:26px;font-weight:900;color:#8ff0bb;">休息 6</div>
+        <div style="font-size:12px;color:#b9c2e8;">甩甩手～下一段：正轉</div>
+      </div>
+      <div class="mini" style="left:6%;bottom:8%;width:42%;">
+        <div style="font-size:13px;"><span class="crown">♛</span> <b>1P 領先！</b><span style="color:#9aa3c0">（反超時全場喊「反超！」）</span></div>
+      </div>
+      <div class="mini" style="right:6%;bottom:8%;width:40%;">
+        <div style="font-size:12px;color:#9aa3c0;margin-bottom:4px;">選歌卡片加難度字：</div>
+        <span class="diffPill" style="background:#3ddc8433;color:#8ff0bb;border:1px solid #8ff0bb66;">簡單</span>
+        <span class="diffPill" style="background:#ffd24a33;color:#ffe9a8;border:1px solid #ffd24a66;">中等</span>
+        <span class="diffPill" style="background:#ff5a3c33;color:#ffb3a0;border:1px solid #ff8a7066;">困難</span>
+      </div>
+    </div>
+    <div class="cap">換方向前 2 秒大箭頭+語音預告；休息段倒數+預告下一段；雙人領先者掛皇冠、反超有音效；選歌顯示 簡單/中等/困難。</div>
+  </div>
+</div>
+</body>
+</html>
