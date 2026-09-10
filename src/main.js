@@ -37,27 +37,30 @@ arduinoStatus.style.cssText = 'color:#8f8;font-family:monospace;font-size:12px;'
 arduinoStatus.textContent = '示範模式（無需 Arduino，直接開始也能玩）';
 
 let sender = simSender((line) => { arduinoStatus.textContent = line; });
-async function doConnect({ silent = false } = {}) {
+let usbPort = null; // 目前開著的埠，重選時先關掉
+async function doConnect({ silent = false, picker = false } = {}) {
   try {
-    // 先用已授權的埠(免使用者手勢)；沒有才 requestPort(Electron 主程序會自動挑 CH340)
+    if (usbPort) { try { await usbPort.close(); } catch { /* 忽略 */ } usbPort = null; } // 重選前先關舊埠
+    // picker=true(手動按鈕) → 一定跳選埠視窗讓使用者挑；否則(Electron 自動)先用已授權的埠
     let port = null;
-    try { port = (await navigator.serial.getPorts())[0] || null; } catch { port = null; }
+    if (!picker) { try { port = (await navigator.serial.getPorts())[0] || null; } catch { port = null; } }
     if (!port) port = await navigator.serial.requestPort();
     const usb = await connectSerial(115200, port);
+    usbPort = usb.port;
     // 包一層：USB 送出時把指令回寫綠字；送出失敗就顯示錯誤（不再默默吞掉）
     sender = { name: 'USB', send: (line) => {
       arduinoStatus.textContent = line.trim(); // 保證先回寫(證明點擊有觸發，與寫入成敗無關)
       Promise.resolve(usb.send(line)).catch((err) => { arduinoStatus.textContent = '⚠ 送出失敗：' + (err && err.message || err); });
       return Promise.resolve();
     } };
-    arduinoBtn.textContent = '已連接 (USB)'; arduinoBtn.disabled = true;
+    arduinoBtn.textContent = '已連接 (USB)｜點此重選 port'; // 保持可按，讓使用者能換 port
     // 一連上就自動送一筆 T,1 驗證「瀏覽器→埠」寫得出去（結果直接顯示在綠字）
     arduinoStatus.textContent = '已連接，自動測試送出 T,1…';
     try { await usb.send('T,1\n'); arduinoStatus.textContent = '✓ 送出成功！Nano 內建燈應會亮(自檢結束後)'; }
     catch (err) { arduinoStatus.textContent = '✗ 送出失敗：' + (err && err.message || err); }
   } catch (e) { if (!silent) alert(e.message); }
 }
-arduinoBtn.addEventListener('click', () => doConnect());
+arduinoBtn.addEventListener('click', () => doConnect({ picker: true })); // 手動一定跳選埠視窗
 
 // 設定齒輪只在選歌畫面顯示，遊戲中退場
 let sp = null;
