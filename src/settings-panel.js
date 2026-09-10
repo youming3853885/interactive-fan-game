@@ -101,7 +101,7 @@ export function createSettingsPanel(hud, settings, media, arduino) {
 
     // ---- 馬達分段動力 ----
     const PCT_LEVELS = [0, 5, 10, 15, 20, 25, 30];
-    const HIGH_PCT = 15; // 超過 12% 韌體上限的檔位：跑 5 秒自動回落
+    const HIGH_PCT = 20; // 超過 15% 韌體上限的檔位：跑 5 秒自動回落
     const warnCss = 'background:#ffffff12;color:#f5c542;border:1px solid #f5c542aa;';
     const hotCss = 'background:#ffffff12;color:#ff6b5e;border:1px solid #ff6b5eaa;';
     const mBox = document.createElement('div');
@@ -143,9 +143,13 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     const dualRow = document.createElement('div');
     dualRow.style.cssText = 'display:flex;gap:6px;margin-top:2px;';
     const dualBtn = document.createElement('button');
-    dualBtn.textContent = '兩台同時 12%（看電供讀數驗證電流）';
+    dualBtn.textContent = '兩台同轉 15%（錯開啟動）';
     dualBtn.style.cssText = 'flex:3;padding:8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;' + offCss;
-    dualBtn.addEventListener('click', () => { setMotor('A', 12); setMotor('B', 12); });
+    // 先踢 A 起轉，0.6 秒後再踢 B：避免兩台同時抽峰值電流把電源打趴（跟遊戲中韌體踢腳錯開同理）
+    dualBtn.addEventListener('click', () => {
+      setMotor('A', 25); setTimeout(() => setMotor('A', 15), 400);
+      setTimeout(() => { setMotor('B', 25); setTimeout(() => setMotor('B', 15), 400); }, 600);
+    });
     const dualStop = document.createElement('button');
     dualStop.textContent = '停';
     dualStop.style.cssText = 'flex:1;padding:8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;' + offCss;
@@ -153,7 +157,7 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     dualRow.append(dualBtn, dualStop);
     mBox.append(dualRow);
     const mNote = document.createElement('div');
-    mNote.textContent = '15% 以上為高檔位：跑 5 秒自動停，之後 8 秒冷卻內只給 12%，避免驅動板過熱。';
+    mNote.textContent = '20% 以上為高檔位：跑 5 秒自動停，之後 8 秒冷卻內只給 15%，避免驅動板過熱。實測堵轉門檻約 10%。';
     mNote.style.cssText = 'font-size:12px;color:#9aa3c0;margin-top:6px;line-height:1.5;';
     mBox.append(mNote);
     box.append(mBox);

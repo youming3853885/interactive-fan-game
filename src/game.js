@@ -5,10 +5,10 @@ export const CONFIG = {
   deadzone: 1.5,
   omegaMax: 12,
   pwmMin: 80,
-  power: 0.12,  // 風機輸出功率（0~1）：轉動時固定此比例動力。0.12 = 12%（啟動門檻約8%，這裡留餘裕）
+  power: 0.15,  // 風機輸出功率（0~1）：0.15 = 15%。實測堵轉門檻~10%；起轉由韌體踢腳(25%×0.3s)幫忙
 };
 
-// 風機永遠跟玩家真實手勢方向；動力固定為 CONFIG.power（目前 20%）。
+// 風機永遠跟玩家真實手勢方向；動力固定為 CONFIG.power（目前 15%）。
 export function fanCommand(omega, cfg) {
   const dir = direction(omega, cfg.deadzone);
   if (dir === 'S') return { dir: 'S', pwm: 0 };
