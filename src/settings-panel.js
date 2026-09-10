@@ -35,7 +35,9 @@ export function createSettingsPanel(hud, settings, media, arduino) {
     const box = document.createElement('div');
     box.style.cssText = 'margin-bottom:14px;padding:12px;background:#ffffff10;border-radius:8px;display:flex;flex-direction:column;gap:8px;';
     const t = document.createElement('div'); t.textContent = '硬體連接（Arduino）'; t.style.cssText = 'font-weight:bold;';
-    box.append(t, arduino.btn, arduino.status);
+    box.append(t, arduino.btn);
+    if (arduino.disc) box.append(arduino.disc); // 斷開/釋放埠
+    box.append(arduino.status);
     modal.append(box);
   }
 

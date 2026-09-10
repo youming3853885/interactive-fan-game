@@ -62,6 +62,20 @@ async function doConnect({ silent = false, picker = false } = {}) {
 }
 arduinoBtn.addEventListener('click', () => doConnect({ picker: true })); // 手動一定跳選埠視窗
 
+// 斷開/釋放埠：關閉目前埠(還給 IDE/其他程式) + 忘記所有已授權的埠(下次不再自動咬住舊埠)
+const arduinoDisc = document.createElement('button');
+arduinoDisc.textContent = '斷開/釋放埠';
+arduinoDisc.style.cssText = 'background:#c0392b;color:#fff;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:700;';
+arduinoDisc.addEventListener('click', async () => {
+  try {
+    if (usbPort) { try { await usbPort.close(); } catch { /* 忽略 */ } usbPort = null; }
+    try { const ports = await navigator.serial.getPorts(); for (const p of ports) { if (p.forget) await p.forget(); } } catch { /* 忽略 */ }
+    sender = simSender((line) => { arduinoStatus.textContent = line; });
+    arduinoBtn.textContent = '連接 Arduino'; arduinoBtn.disabled = false;
+    arduinoStatus.textContent = '已斷開、埠已釋放（Arduino IDE 現在可用了）';
+  } catch (e) { arduinoStatus.textContent = '斷開失敗：' + (e && e.message || e); }
+});
+
 // 設定齒輪只在選歌畫面顯示，遊戲中退場
 let sp = null;
 function showControls(v) {
@@ -183,7 +197,7 @@ async function boot() {
 
   media = createMusicWidget(hud, mvVideo, video, settings, BUILTIN_TRACKS);
   sp = createSettingsPanel(hud, settings, media, {
-    btn: arduinoBtn, status: arduinoStatus,
+    btn: arduinoBtn, status: arduinoStatus, disc: arduinoDisc,
     test: (s) => sender.send(formatCommand(testChannel(s.pwmA, s.ledA), testChannel(s.pwmB, s.ledB))).catch(() => {}),
     testLed: (on) => sender.send(builtinLedLine(on)).catch(() => {}),
   });
