@@ -345,7 +345,8 @@ async function loop(pose) {
     if (mode === 'single') {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
       const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
-      sender.send(formatCommand({ ...fs, energy: e }, { ...fs, energy: e })).catch(() => {});
+      // 單人模式固定只吹 2P 風機（A 馬達停、燈光能量兩邊照送）
+      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fs, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         hand: handS, active: m.active });
