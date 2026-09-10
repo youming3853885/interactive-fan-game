@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>判定提示 mockup — 太快/太慢</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b0b12; color: #fff; font-family: "Microsoft JhengHei", sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9aa3c0; font-size: 13px; margin-bottom: 20px; }
+  .row { display: flex; gap: 18px; flex-wrap: wrap; }
+  .scene { width: 380px; height: 260px; border-radius: 12px; position: relative; overflow: hidden;
+    background: radial-gradient(ellipse at 50% 30%, #2a1a4a 0%, #12081f 60%, #0a0512 100%);
+    border: 1px solid #fff2; }
+  .scene .label { position: absolute; top: 8px; left: 10px; font-size: 12px; color: #9aa3c0; }
+  .orbit { position: absolute; left: 50%; top: 48%; width: 150px; height: 150px; border: 2px dashed #ffffff22;
+    border-radius: 50%; transform: translate(-50%, -50%); }
+  .hand { position: absolute; width: 16px; height: 16px; border-radius: 50%; background: #2b7bff;
+    box-shadow: 0 0 14px #2b7bffcc, 0 0 30px #2b7bff66; left: 66%; top: 30%; }
+  .judge { position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); text-align: center; }
+  .jword { font-size: 34px; font-weight: 900; letter-spacing: 2px;
+    text-shadow: 0 2px 10px #000c, 0 0 22px currentColor; }
+  .jp { color: #ffd24a; } .jg { color: #7fd4ff; } .jd { color: #b8c0d8; }
+  .pts { font-size: 15px; font-weight: 700; color: #fff; opacity: .9; margin-top: 2px; }
+  .hint { display: inline-block; margin-top: 8px; padding: 4px 14px; border-radius: 999px;
+    font-size: 16px; font-weight: 900; letter-spacing: 1px; }
+  .hint.fast { background: #ff5a3caa; color: #fff; border: 1px solid #ff8a70; box-shadow: 0 0 16px #ff5a3c88; }
+  .hint.slow { background: #2fa8ffaa; color: #fff; border: 1px solid #7cc8ff; box-shadow: 0 0 16px #2fa8ff88; }
+  .hint.ok   { background: #3ddc84aa; color: #063; border: 1px solid #8ff0bb; box-shadow: 0 0 16px #3ddc8488; }
+  .points { margin-top: 20px; background: #12131c; border: 1px solid #fff3; border-radius: 14px; padding: 16px 20px; max-width: 800px; }
+  .points li { margin: 6px 0 6px 18px; font-size: 14px; line-height: 1.6; color: #dfe4ff; }
+</style>
+</head>
+<body>
+<h1>判定提示 mockup — 太快 / 太慢</h1>
+<div class="sub">判定字下方多一顆藥丸提示，跟判定字一起彈出、一起淡出（約 1 秒）。PERFECT 顯示綠色「節奏完美」。</div>
+
+<div class="row">
+  <div class="scene">
+    <div class="label">畫太快 → GREAT + 提示</div>
+    <div class="orbit"></div><div class="hand"></div>
+    <div class="judge">
+      <div class="jword jg">GREAT</div>
+      <div class="pts">+400</div>
+      <div class="hint fast">太快了！慢一點</div>
+    </div>
+  </div>
+
+  <div class="scene">
+    <div class="label">畫太慢 → GOOD + 提示</div>
+    <div class="orbit"></div><div class="hand" style="left:30%;top:60%;"></div>
+    <div class="judge">
+      <div class="jword jd">GOOD</div>
+      <div class="pts">+100</div>
+      <div class="hint slow">太慢了！加把勁</div>
+    </div>
+  </div>
+
+  <div class="scene">
+    <div class="label">速率契合 → PERFECT</div>
+    <div class="orbit"></div><div class="hand" style="left:40%;top:26%;"></div>
+    <div class="judge">
+      <div class="jword jp">PERFECT</div>
+      <div class="pts">+1500</div>
+      <div class="hint ok">節奏完美</div>
+    </div>
+  </div>
+</div>
+
+<div class="points">
+  <ul>
+    <li><b>評分改為「與引導速率的偏差」</b>：±20% 內 PERFECT、±50% 內 GREAT、更偏 GOOD——太快太慢都會掉級，跟著每首歌的 BPM 走。</li>
+    <li><b>提示藥丸</b>：橘紅=太快、藍=太慢、綠=完美；跟判定字同步彈出淡出，玩家立刻知道往哪修正。</li>
+    <li>雙人模式各自顯示在自己那半邊（跟現有判定字同位置）。</li>
+  </ul>
+</div>
+</body>
+</html>

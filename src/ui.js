@@ -26,9 +26,9 @@ export function createUI(canvas) {
   const judges = [];                         // 判定文字特效 GOOD/GREAT/PERFECT
   const comboPulse = { S: 0, A: 0, B: 0 };   // combo 增加時的彈跳動畫
   const prevComboN = { S: 0, A: 0, B: 0 };
-  // 判定特效（每轉完一圈觸發）：大字彈出 + 上浮 + 淡出，附 +分數。
-  function judge(word, pts, mult, x, y, color) {
-    judges.push({ word, pts, mult, x, y, color, life: 1 });
+  // 判定特效（每轉完一圈觸發）：大字彈出 + 上浮 + 淡出，附 +分數與節奏提示藥丸。
+  function judge(word, pts, mult, x, y, color, pace) {
+    judges.push({ word, pts, mult, x, y, color, pace, life: 1 });
   }
   function drawJudges() {
     const H = canvas.height;
@@ -50,6 +50,18 @@ export function createUI(canvas) {
       ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.045)}px system-ui`;
       ctx.lineWidth = 5; ctx.strokeStyle = '#05070f'; ctx.strokeText(`+${j.pts}`, 0, H * 0.15);
       ctx.fillText(`+${j.pts}`, 0, H * 0.15);
+      // 節奏提示藥丸：太快(橘紅)/太慢(藍)/完美(綠)，跟判定字同步淡出
+      const pace = j.pace === 'fast' ? ['太快了！慢一點', '#ff5a3c', '#fff']
+        : j.pace === 'slow' ? ['太慢了！加把勁', '#2fa8ff', '#fff']
+        : j.pace === 'ok' ? ['節奏完美', '#3ddc84', '#063a1e'] : null;
+      if (pace) {
+        const [txt, bg, fg] = pace;
+        ctx.font = `900 ${Math.round(H * 0.034)}px system-ui`;
+        const tw = ctx.measureText(txt).width, ph = H * 0.052, pw = tw + H * 0.05, py = H * 0.225;
+        ctx.fillStyle = bg; ctx.shadowColor = bg; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.roundRect(-pw / 2, py - ph / 2, pw, ph, ph / 2); ctx.fill();
+        ctx.shadowBlur = 0; ctx.fillStyle = fg; ctx.fillText(txt, 0, py);
+      }
       ctx.restore();
     }
     ctx.globalAlpha = 1;

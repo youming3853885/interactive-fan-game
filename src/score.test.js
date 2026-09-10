@@ -30,17 +30,24 @@ describe('comboMultiplier', () => {
   });
 });
 
-describe('judgeBySpeed', () => {
+describe('judgeBySpeed（與目標速率的偏差評級：太快太慢都掉級）', () => {
   const T = targetOmegaFor(120, SCORE_CFG);
-  it('接近或超過目標轉速 → PERFECT', () => {
-    expect(judgeBySpeed(T, 120, SCORE_CFG)).toBe('PERFECT');
-    expect(judgeBySpeed(T * 1.5, 120, SCORE_CFG)).toBe('PERFECT');
+  it('±20% 內 → PERFECT / 節奏完美', () => {
+    expect(judgeBySpeed(T, 120, SCORE_CFG)).toEqual({ judge: 'PERFECT', pace: 'ok' });
+    expect(judgeBySpeed(T * 1.15, 120, SCORE_CFG).judge).toBe('PERFECT');
   });
-  it('偏慢一些 → GREAT', () => {
-    expect(judgeBySpeed(T * 0.5, 120, SCORE_CFG)).toBe('GREAT');
+  it('偏快 20~50% → GREAT / 太快', () => {
+    expect(judgeBySpeed(T * 1.4, 120, SCORE_CFG)).toEqual({ judge: 'GREAT', pace: 'fast' });
   });
-  it('太慢 → GOOD', () => {
-    expect(judgeBySpeed(T * 0.2, 120, SCORE_CFG)).toBe('GOOD');
+  it('偏慢 20~50% → GREAT / 太慢', () => {
+    expect(judgeBySpeed(T * 0.6, 120, SCORE_CFG)).toEqual({ judge: 'GREAT', pace: 'slow' });
+  });
+  it('偏差超過 50% → GOOD（太快也一樣）', () => {
+    expect(judgeBySpeed(T * 2, 120, SCORE_CFG)).toEqual({ judge: 'GOOD', pace: 'fast' });
+    expect(judgeBySpeed(T * 0.3, 120, SCORE_CFG)).toEqual({ judge: 'GOOD', pace: 'slow' });
+  });
+  it('目標速率跟著 BPM：120 的速度拿去玩 168 的歌會變太慢', () => {
+    expect(judgeBySpeed(T, 168, SCORE_CFG).pace).toBe('slow');
   });
 });
 

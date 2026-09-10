@@ -5,9 +5,9 @@ export const SCORE_CFG = {
   comboStep: 2,        // 每 N 圈 combo 倍率 +1
   comboMax: 5,
   revsPerBeat: 0.5,    // 導引箭頭/風機用的目標轉速
-  // 判定：該圈平均角速度(rad/s)的絕對門檻（可達成，三級才會真的出現）
-  perfectW: 5.0,       // ≈0.8 圈/秒（用力轉）
-  greatW: 2.5,         // ≈0.4 圈/秒（一般轉）；以下=GOOD
+  // 判定：與目標速率(targetOmegaFor)的偏差頻帶——太快太慢都掉級，跟著每首歌 BPM 走
+  perfectBand: 0.2,    // ±20% 內 → PERFECT
+  greatBand: 0.5,      // ±50% 內 → GREAT；更偏 → GOOD
 };
 
 export function targetOmegaFor(bpm, cfg) {
@@ -19,12 +19,13 @@ export function comboMultiplier(combo, cfg) {
   return Math.min(cfg.comboMax, 1 + Math.floor(combo / cfg.comboStep));
 }
 
-// 依「該圈平均角速度(rad/s)」給判定：轉越用力越高級。PERFECT / GREAT / GOOD。
+// 依「該圈平均轉速與目標速率的偏差」評級：契合=PERFECT，太快太慢都掉級。
+// 回傳 { judge, pace }，pace: 'ok'|'fast'|'slow'（給畫面顯示「太快/太慢」提示用）。
 export function judgeBySpeed(avgOmega, bpm, cfg) {
-  const w = Math.abs(avgOmega);
-  if (w >= cfg.perfectW) return 'PERFECT';
-  if (w >= cfg.greatW) return 'GREAT';
-  return 'GOOD';
+  const dev = Math.abs(avgOmega) / targetOmegaFor(bpm, cfg) - 1;
+  const judge = Math.abs(dev) <= cfg.perfectBand ? 'PERFECT'
+    : Math.abs(dev) <= cfg.greatBand ? 'GREAT' : 'GOOD';
+  return { judge, pace: judge === 'PERFECT' ? 'ok' : dev > 0 ? 'fast' : 'slow' };
 }
 
 // 一圈得分 = 該級固定分 × combo 倍率

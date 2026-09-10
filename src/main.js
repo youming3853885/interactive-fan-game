@@ -332,12 +332,12 @@ async function loop(pose) {
         if (st.mAcc >= 2 * Math.PI) {
           st.mAcc -= 2 * Math.PI;
           const avg = st.oN ? st.oSum / st.oN : 0; st.oSum = 0; st.oN = 0;
-          const j = judgeBySpeed(avg, bpm, SCORE_CFG);
+          const { judge: j, pace } = judgeBySpeed(avg, bpm, SCORE_CFG);
           st.combo += 1;
           const pts = revScore(st.combo, j, SCORE_CFG); st.score += pts;
           const mult = comboMultiplier(st.combo, SCORE_CFG);
           const leveled = mult > st.mult; st.mult = mult;
-          ui.judge(j, pts, mult, cx, cy, color);
+          ui.judge(j, pts, mult, cx, cy, color, pace);
           const fl = judgeFlashLine('D', j); // 燈條得分閃爍：PERFECT 金、GREAT 白、GOOD 不閃
           if (fl) sender.send(fl).catch(() => {});
           sfx.hit(mult >= 3);                              // 每圈遊戲打點音（GOOD 只有這個）
