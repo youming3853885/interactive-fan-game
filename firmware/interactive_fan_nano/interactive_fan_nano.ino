@@ -59,15 +59,13 @@ void setup() {
   selfTest();
 }
 
-// 開機自檢（共 6 秒，三樣同時）：風機 1P 轉 6 秒 + 兩條燈條慢速閃爍 + 內建燈同步閃。
+// 開機自檢（共 6 秒）：兩條燈條慢速閃爍 + 內建燈同步閃。馬達不動（要測馬達用測試分頁）。
 void selfTest() {
   fxA = FX_ENERGY; fxB = FX_ENERGY;
-  driveMotor(IN1, IN2, ENA, 'F', PWM_MAX);
   for (int i = 0; i < 5; i++) {                       // 5 輪 × (亮0.6s+暗0.6s) = 6 秒
     energyA = 100; energyB = 100; showStrips(); digitalWrite(LED_BUILTIN, HIGH); delay(600);
     energyA = 0;   energyB = 0;   showStrips(); digitalWrite(LED_BUILTIN, LOW);  delay(600);
   }
-  driveMotor(IN1, IN2, ENA, 'S', 0);
 }
 
 // H 橋（遊戲用）：dir='F' 正轉、'R' 反轉、'S' 停。PWM 一律夾到 PWM_MAX(12%)保護驅動板。
