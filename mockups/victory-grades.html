@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>評級結算畫面 mockup — S/A/B/C</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #06060c; color: #fff; font-family: "Microsoft JhengHei", sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9aa3c0; font-size: 13px; margin-bottom: 20px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1200px; }
+  .scene { position: relative; height: 340px; border-radius: 14px; overflow: hidden; border: 1px solid #fff2;
+    display: flex; align-items: center; justify-content: center; gap: 28px; }
+  .scene .tag { position: absolute; top: 10px; left: 12px; font-size: 12px; color: #ffffff88; }
+  .pic { height: 260px; width: 260px; object-fit: contain; filter: drop-shadow(0 6px 24px #000c); }
+  .info { text-align: center; }
+  .stars { font-size: 34px; letter-spacing: 6px; }
+  .grade { font-size: 92px; font-weight: 900; line-height: 1.05; text-shadow: 0 0 40px currentColor; }
+  .slogan { font-size: 26px; font-weight: 900; margin-top: 2px; letter-spacing: 2px; }
+  .score { font-size: 20px; font-weight: 700; margin-top: 10px; color: #fff; opacity: .92; }
+  .school { margin-top: 12px; font-size: 12px; color: #ffffff77; }
+
+  .s-S { background: radial-gradient(ellipse at 50% 30%, #4a3405 0%, #17110a 55%, #0a0805 100%); }
+  .s-S .stars, .s-S .grade { color: #ffd24a; } .s-S .slogan { color: #ffe9a8; }
+  .s-A { background: radial-gradient(ellipse at 50% 30%, #33195c 0%, #140b22 55%, #0a0612 100%); }
+  .s-A .stars, .s-A .grade { color: #c99cff; } .s-A .slogan { color: #e6d4ff; }
+  .s-B { background: radial-gradient(ellipse at 50% 30%, #0d3a55 0%, #09141f 55%, #05090f 100%); }
+  .s-B .stars, .s-B .grade { color: #5ec8ff; } .s-B .slogan { color: #c8ecff; }
+  .s-C { background: radial-gradient(ellipse at 50% 30%, #58300f 0%, #1c120a 55%, #0d0805 100%); }
+  .s-C .stars, .s-C .grade { color: #ffa04d; } .s-C .slogan { color: #ffd9b3; }
+  .dim { opacity: .25; }
+</style>
+</head>
+<body>
+<h1>評級結算畫面 mockup — 依 S / A / B / C 顯示不同畫面</h1>
+<div class="sub">插畫 = codex 手繪童趣風（實作時放大置於畫面左側，煙火/彩帶動畫沿用現有 canvas 特效）；文字全部 HTML/canvas 繪製。</div>
+
+<div class="grid">
+  <div class="scene s-S">
+    <div class="tag">S 級 — 金色</div>
+    <img class="pic" src="assets/grade-S.png" alt="S級插畫">
+    <div class="info">
+      <div class="stars">★★★</div>
+      <div class="grade">S</div>
+      <div class="slogan">畫圈大師！</div>
+      <div class="score">分數 43600</div>
+      <div class="school">澎湖縣龍門國小 · 畫圈對決</div>
+    </div>
+  </div>
+
+  <div class="scene s-A">
+    <div class="tag">A 級 — 紫色</div>
+    <img class="pic" src="assets/grade-A.png" alt="A級插畫">
+    <div class="info">
+      <div class="stars">★★<span class="dim">★</span></div>
+      <div class="grade">A</div>
+      <div class="slogan">超棒的！</div>
+      <div class="score">分數 28400</div>
+      <div class="school">澎湖縣龍門國小 · 畫圈對決</div>
+    </div>
+  </div>
+
+  <div class="scene s-B">
+    <div class="tag">B 級 — 藍色</div>
+    <img class="pic" src="assets/grade-B.png" alt="B級插畫">
+    <div class="info">
+      <div class="stars">★<span class="dim">★★</span></div>
+      <div class="grade">B</div>
+      <div class="slogan">很不錯喔！</div>
+      <div class="score">分數 15200</div>
+      <div class="school">澎湖縣龍門國小 · 畫圈對決</div>
+    </div>
+  </div>
+
+  <div class="scene s-C">
+    <div class="tag">C 級 — 橘色（鼓勵不責備）</div>
+    <img class="pic" src="assets/grade-C.png" alt="C級插畫">
+    <div class="info">
+      <div class="stars"><span class="dim">★★★</span></div>
+      <div class="grade">C</div>
+      <div class="slogan">再挑戰一次！</div>
+      <div class="score">分數 6800</div>
+      <div class="school">澎湖縣龍門國小 · 畫圈對決</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -16,6 +16,15 @@ export function createUI(canvas) {
   for (const n of [1, 2, 3]) { barImgs[n] = new Image(); barImgs[n].src = import.meta.env.BASE_URL + `bars/bar-${n}.webp`; }
   const judgeImgs = {}; // 判定爆炸字（codex 普普風）
   for (const w of ['GOOD', 'GREAT', 'PERFECT']) { judgeImgs[w] = new Image(); judgeImgs[w].src = import.meta.env.BASE_URL + `judge/${w.toLowerCase()}.webp`; }
+  // 單人結算：依評級換插畫（codex 手繪蠟筆童趣風）+ 主色 + 標語。C 級走鼓勵路線不責備。
+  const GRADE_STYLE = {
+    S: { col: '#ffd24a', slogan: '畫圈大師！' },
+    A: { col: '#c99cff', slogan: '超棒的！' },
+    B: { col: '#5ec8ff', slogan: '很不錯喔！' },
+    C: { col: '#ffa04d', slogan: '再挑戰一次！' },
+  };
+  const gradeImgs = {};
+  for (const g of ['S', 'A', 'B', 'C']) { gradeImgs[g] = new Image(); gradeImgs[g].src = import.meta.env.BASE_URL + `grades/grade-${g.toLowerCase()}.webp`; }
   let guidePhase = 0;                            // 導引圓方向標記的動畫相位
 
   const SCHOOL = '澎湖縣龍門國小 · 畫圈對決';
@@ -609,13 +618,25 @@ export function createUI(canvas) {
       drawFireworks();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       if (result.mode === 'single') {
+        const gs = GRADE_STYLE[result.grade] || GRADE_STYLE.C;
+        const img = gradeImgs[result.grade];
+        const hasImg = img && img.complete && img.naturalWidth;
+        const tx = hasImg ? W * 0.66 : cx; // 有插畫時文字靠右、插畫在左；沒載到就置中
+        if (hasImg) {
+          const ih = H * 0.62 * (0.6 + ease * 0.4), iw = ih * img.naturalWidth / img.naturalHeight;
+          ctx.globalAlpha = ease;
+          ctx.drawImage(img, W * 0.30 - iw / 2, H * 0.46 - ih / 2, iw, ih);
+          ctx.globalAlpha = 1;
+        }
         const stars = { S: 3, A: 2, B: 1, C: 0 }[result.grade] ?? 0;
-        drawStars(cx, H * 0.24, stars, ease);
-        ctx.save(); ctx.translate(cx, H * 0.44); ctx.scale(0.3 + ease * 0.7, 0.3 + ease * 0.7);
-        ctx.fillStyle = gold; ctx.shadowColor = gold; ctx.shadowBlur = 40; ctx.font = `900 ${Math.round(H * 0.22)}px system-ui`;
+        drawStars(tx, H * 0.2, stars, ease);
+        ctx.save(); ctx.translate(tx, H * 0.42); ctx.scale(0.3 + ease * 0.7, 0.3 + ease * 0.7);
+        ctx.fillStyle = gs.col; ctx.shadowColor = gs.col; ctx.shadowBlur = 40; ctx.font = `900 ${Math.round(H * 0.2)}px system-ui`;
         ctx.fillText(result.grade, 0, 0); ctx.restore();
-        ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.06)}px system-ui`;
-        ctx.fillText(`分數 ${Math.round(result.score * ease)}`, cx, H * 0.64);
+        ctx.fillStyle = gs.col; ctx.shadowColor = gs.col; ctx.shadowBlur = 14; ctx.font = `900 ${Math.round(H * 0.055)}px system-ui`;
+        ctx.fillText(gs.slogan, tx, H * 0.585);
+        ctx.shadowBlur = 0; ctx.fillStyle = '#fff'; ctx.font = `900 ${Math.round(H * 0.05)}px system-ui`;
+        ctx.fillText(`分數 ${Math.round(result.score * ease)}`, tx, H * 0.68);
       } else {
         ctx.save(); ctx.translate(cx, H * 0.4); ctx.scale(0.3 + ease * 0.7, 0.3 + ease * 0.7);
         ctx.fillStyle = result.who === 'A' ? colorA : result.who === 'B' ? colorB : '#fff';
