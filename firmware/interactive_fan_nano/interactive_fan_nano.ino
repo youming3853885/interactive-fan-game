@@ -1,7 +1,9 @@
 // 畫圈對決 — Arduino Nano 韌體（2 路 H 橋驅動板版：ENA/IN1/IN2，配 775 風機 + 12V 電源）
-// 收 Web Serial 一行指令：A,F,180,45;B,R,200,60\n
-//   每個頻道 = 頻道id,方向(F/R/S),PWM(0..255),能量(0..100)
-//   A = 1P（螢幕左）、B = 2P（螢幕右）。ENA/ENB 給 PWM 調速、IN 給方向。
+// 收 Web Serial 一行指令（分號分隔多個 token）：
+//   A,F,180,45   遊戲頻道：頻道id,方向(F/R/S),PWM(0..255),能量(0..100)。A=1P、B=2P。
+//   M,A,51       馬達分段測試：PWM 0..77。>31(12%) 的高檔限時 5 秒自動回落＋冷卻 8 秒。
+//   E,D,9        燈條特效：目標 A/B/D(兩條)，特效碼 0..11（見 renderFx，與前端 protocol.js FX 對應）。
+//   T,1          Nano 內建燈(D13)：測「網頁↔Nano」連線。
 //
 // ---- Arduino Nano 接腳（HQT 2 路直流馬達驅動板：ENA/INT1/INT2 每路） ----
 //   馬達 A（風機 1P）：ENA→D3(PWM~)  INT1→D2  INT2→D4
@@ -28,13 +30,24 @@
 #define LED_B_PIN 8
 #define NUM_LEDS 240          // 4m×60燈/m=240（若你的條是30燈/m 改成120）
 #define BRIGHT 50             // 亮度上限(0-255)：兩條全亮壓在 ~4A 內，保護 5V 5A 電源；覺得暗可加到 70
-#define PWM_MAX 31            // 風機輸出上限 12%(255*0.12=31)：硬性保護，避免驅動板過熱
+#define PWM_MAX 31            // 遊戲中風機上限 12%(255*0.12=31)：硬性保護，避免驅動板過熱
+#define TEST_MAX 77           // 測試分頁上限 30%：高檔只能短時間跑（見 motorTest 限時）
 
 // 兩條共用一塊緩衝（輪流畫、各自輸出）→ RAM 減半，240 顆才塞得進 Nano 的 2KB SRAM
 CRGB leds[NUM_LEDS];
 CLEDController *ctlA, *ctlB;
+
+// ---- 燈條特效引擎：每條一個模式，loop 依 millis 非阻塞演算 ----
+// 特效碼：0全暗 1能量65 2能量100 3反轉倒流 4combo藍 5combo金 6combo彩虹
+//         7PERFECT閃白(一次性) 8紅脈衝 9勝利煙火 10待機彩虹 11就位漸滿 12遊戲能量條(內部用)
+#define FX_ENERGY 12
+byte fxA = 0, fxB = 0;
 byte energyA = 0, energyB = 0;
-bool ledsDirty = false;  // 燈有變才 show()：show() 會關中斷，狂 show 會掉序列資料
+unsigned long fxStartA = 0, fxStartB = 0;
+bool ledsDirty = false;  // 燈有變才輸出：show 會關中斷，狂 show 會掉序列資料
+
+// ---- 馬達高檔測試限時（>12% 跑 5 秒自動回落，冷卻 8 秒內只給 12%）----
+unsigned long mEndA = 0, mCoolA = 0, mEndB = 0, mCoolB = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -53,34 +66,100 @@ void selfTest() {
   driveMotor(IN1, IN2, ENA, 'S', 0);
   driveMotor(IN3, IN4, ENB, 'F', PWM_MAX); delay(600);
   driveMotor(IN3, IN4, ENB, 'S', 0);
+  fxA = FX_ENERGY; fxB = FX_ENERGY;
   for (int e = 0; e <= 100; e += 10) { energyA = e; energyB = e; showStrips(); delay(50); }
   energyA = 0; energyB = 0; showStrips();
 }
 
-// H 橋：dir='F' 正轉、'R' 反轉、'S' 停；EN 給 PWM 調速。PWM 一律夾到 PWM_MAX(12%)保護驅動板。
+// H 橋（遊戲用）：dir='F' 正轉、'R' 反轉、'S' 停。PWM 一律夾到 PWM_MAX(12%)保護驅動板。
 void driveMotor(int inA, int inB, int en, char dir, int pwm) {
   digitalWrite(inA, dir == 'F' ? HIGH : LOW);
   digitalWrite(inB, dir == 'R' ? HIGH : LOW);
-  int p = pwm > PWM_MAX ? PWM_MAX : pwm;   // 硬性上限，任何指令(自檢/測試/遊玩)都不超過 12%
+  int p = pwm > PWM_MAX ? PWM_MAX : pwm;   // 硬性上限，任何遊戲指令都不超過 12%
   analogWrite(en, dir == 'S' ? 0 : p);
 }
 
-void fillEnergy(int energy, CRGB color) {
-  int n = (energy * NUM_LEDS) / 100;
+// 測試分頁用：只正轉，上限 TEST_MAX(30%)。高檔限時控制在 motorTest / loop。
+void driveMotorTest(int inA, int inB, int en, int pwm) {
+  if (pwm > TEST_MAX) pwm = TEST_MAX;
+  digitalWrite(inA, pwm > 0 ? HIGH : LOW);
+  digitalWrite(inB, LOW);
+  analogWrite(en, pwm);
+}
+
+// 馬達分段測試：>PWM_MAX 的檔位限時 5 秒（loop 到時自動回落＋進 8 秒冷卻）；冷卻中只給 12%。
+void motorTest(char ch, int pwm) {
+  if (ch != 'A' && ch != 'B') return;  // 亂碼防呆
+  bool isA = ch == 'A';
+  unsigned long *cool = isA ? &mCoolA : &mCoolB;
+  unsigned long *end  = isA ? &mEndA  : &mEndB;
+  if (pwm > PWM_MAX) {
+    if (millis() < *cool) pwm = PWM_MAX;         // 冷卻中：退回安全檔
+    else *end = millis() + 5000;                 // 高檔開 5 秒限時
+  }
+  if (pwm <= PWM_MAX) *end = 0;                  // 低檔/停不用限時
+  if (isA) driveMotorTest(IN1, IN2, ENA, pwm); else driveMotorTest(IN3, IN4, ENB, pwm);
+}
+
+// 能量條：前 n 顆上色、其餘黑
+void barFill(int pct, CRGB color) {
+  int n = (int)(((long)pct * NUM_LEDS) / 100);
   for (int i = 0; i < NUM_LEDS; i++) leds[i] = (i < n) ? color : CRGB::Black;
+}
+
+// 這些特效會動，要連續刷新；其他是靜態畫一次就好
+bool fxAnimated(byte fx) { return fx == 3 || fx == 6 || (fx >= 8 && fx <= 11); }
+
+// 依特效碼畫一幀到共用緩衝。t=該特效已跑毫秒數。
+void renderFx(byte fx, unsigned long t, CRGB base, int energy) {
+  switch (fx) {
+    default:
+    case 0: fill_solid(leds, NUM_LEDS, CRGB::Black); break;
+    case 1: barFill(65, base); break;
+    case 2: barFill(100, base); break;
+    case 3: { // 反轉倒流：條從尾端長 65%，一顆白色亮點往回跑
+      fill_solid(leds, NUM_LEDS, CRGB::Black);
+      int n = (int)((long)65 * NUM_LEDS / 100);
+      for (int i = 0; i < n; i++) leds[NUM_LEDS - 1 - i] = base;
+      leds[NUM_LEDS - 1 - (int)((t / 25) % NUM_LEDS)] = CRGB::White;
+      break; }
+    case 4: barFill(100, CRGB::Blue); break;
+    case 5: barFill(100, CRGB(255, 150, 0)); break;
+    case 6: fill_rainbow(leds, NUM_LEDS, (t / 15) & 0xFF, 255 / NUM_LEDS + 1); break;
+    case 7: fill_solid(leds, NUM_LEDS, t < 250 ? CRGB::White : CRGB::Black); break; // 一次性，loop 300ms 後自動歸零
+    case 8: fill_solid(leds, NUM_LEDS, CRGB::Red); nscale8_video(leds, NUM_LEDS, beatsin8(72, 30, 255)); break;
+    case 9: { // 勝利煙火：暗紫底 + 金白火花（位置用 t 雜湊，免每條各留狀態緩衝）
+      fill_solid(leds, NUM_LEDS, CRGB(10, 0, 18));
+      for (byte k = 0; k < 10; k++) {
+        unsigned int s = (unsigned int)(t / 90) * 31 + k * 7919; s ^= s << 7; s ^= s >> 9;
+        leds[s % NUM_LEDS] = (k & 1) ? CRGB::Gold : CRGB::White;
+      }
+      break; }
+    case 10: fill_rainbow(leds, NUM_LEDS, (t / 60) & 0xFF, 255 / NUM_LEDS + 1); nscale8_video(leds, NUM_LEDS, beatsin8(10, 25, 170)); break;
+    case 11: barFill((int)((t % 3000) * 100 / 3000), CRGB::Green); break;
+    case FX_ENERGY: barFill(energy, base); break;
+  }
 }
 
 // 兩條輪流畫進共用緩衝、各自輸出（BRIGHT 同時當亮度/電流上限）
 void showStrips() {
-  fillEnergy(energyA, CRGB::Cyan);    ctlA->showLeds(BRIGHT);
-  fillEnergy(energyB, CRGB::Magenta); ctlB->showLeds(BRIGHT);
+  unsigned long now = millis();
+  renderFx(fxA, now - fxStartA, CRGB::Cyan, energyA);    ctlA->showLeds(BRIGHT);
+  renderFx(fxB, now - fxStartB, CRGB::Magenta, energyB); ctlB->showLeds(BRIGHT);
 }
 
-// 解析一個頻道 token，如 "A,F,180,45"
+// 解析一個 token（"A,F,180,45" / "M,A,51" / "E,D,9" / "T,1"）
 // ⚠ 必須用 strtok_r：外層 loop() 也在切字串，plain strtok 全域狀態會互踩 → B 頻道整段被吃掉
 void applyToken(char* tok) {
   char id = tok[0];
   if (id == 'T') { digitalWrite(LED_BUILTIN, atoi(tok + 2) ? HIGH : LOW); return; } // 內建燈測連線
+  if (id == 'M') { motorTest(tok[2], atoi(tok + 4)); return; }                       // 馬達分段測試
+  if (id == 'E') {                                                                    // 燈條特效
+    char tgt = tok[2]; byte code = atoi(tok + 4);
+    if (tgt == 'A' || tgt == 'D') { fxA = code; fxStartA = millis(); }
+    if (tgt == 'B' || tgt == 'D') { fxB = code; fxStartB = millis(); }
+    ledsDirty = true; return;
+  }
   char* save;
   char* p = strtok_r(tok + 2, ",", &save);   // dir
   char dir = p ? p[0] : 'S';
@@ -88,8 +167,8 @@ void applyToken(char* tok) {
   p = strtok_r(NULL, ",", &save); int pwm = p ? atoi(p) : 0;
   p = strtok_r(NULL, ",", &save); int energy = p ? atoi(p) : 0;
   if (energy < 0) energy = 0; if (energy > 100) energy = 100;
-  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); energyA = energy; ledsDirty = true; }
-  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); energyB = energy; ledsDirty = true; }
+  if (id == 'A') { driveMotor(IN1, IN2, ENA, dir, pwm); energyA = energy; fxA = FX_ENERGY; fxStartA = millis(); ledsDirty = true; }
+  else if (id == 'B') { driveMotor(IN3, IN4, ENB, dir, pwm); energyB = energy; fxB = FX_ENERGY; fxStartB = millis(); ledsDirty = true; }
 }
 
 void loop() {
@@ -107,6 +186,16 @@ void loop() {
       buf[len++] = c;
     }
   }
-  // 燈有變且距上次 >100ms 才更新：兩條 240 顆各輸出一次會關中斷 ~14ms，太頻繁會讓序列指令掉字
-  if (ledsDirty && millis() - lastShow > 100) { showStrips(); ledsDirty = false; lastShow = millis(); }
+  unsigned long nowMs = millis();
+  // 馬達高檔測試到時：自動回落＋進冷卻
+  if (mEndA && nowMs > mEndA) { driveMotorTest(IN1, IN2, ENA, 0); mEndA = 0; mCoolA = nowMs + 8000; }
+  if (mEndB && nowMs > mEndB) { driveMotorTest(IN3, IN4, ENB, 0); mEndB = 0; mCoolB = nowMs + 8000; }
+  // PERFECT 閃白是一次性：300ms 後自動回全暗
+  if (fxA == 7 && nowMs - fxStartA > 300) { fxA = 0; ledsDirty = true; }
+  if (fxB == 7 && nowMs - fxStartB > 300) { fxB = 0; ledsDirty = true; }
+  // 動態特效連續刷新(40ms)；靜態只在有變時輸出(100ms 節流)。show 關中斷會掉序列字，不能太密。
+  bool anim = fxAnimated(fxA) || fxAnimated(fxB);
+  if ((ledsDirty || anim) && nowMs - lastShow > (unsigned long)(anim ? 40 : 100)) {
+    showStrips(); ledsDirty = false; lastShow = nowMs;
+  }
 }

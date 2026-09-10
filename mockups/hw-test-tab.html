@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<title>硬體測試分頁 mockup — 左現況 / 右優化</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0b0b12; color: #fff; font-family: "Microsoft JhengHei", sans-serif; padding: 24px; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #9aa3c0; font-size: 13px; margin-bottom: 20px; }
+  .wrap { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .col { flex: 1; min-width: 400px; }
+  .col-title { font-size: 15px; font-weight: bold; margin-bottom: 10px; padding: 6px 12px; border-radius: 8px; display: inline-block; }
+  .col-title.old { background: #5a2b2b; }
+  .col-title.new { background: #2b7bff; }
+
+  .modal { width: 420px; background: #12131cf7; border: 1px solid #fff3; border-radius: 14px; padding: 20px; font-size: 14px; box-shadow: 0 20px 60px #000a; }
+  .mhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .mtitle { font-size: 18px; font-weight: bold; }
+  .x { color: #fff; font-size: 20px; }
+  .box { margin-bottom: 14px; padding: 12px; background: #ffffff10; border-radius: 8px; }
+  .bt { font-weight: bold; margin-bottom: 8px; }
+  .btn-blue { display: block; width: 100%; background: #2b7bff; color: #fff; border: none; border-radius: 8px; padding: 9px 14px; font-weight: 700; text-align: center; margin-bottom: 8px; font-size: 14px; }
+  .btn-red { display: block; width: 100%; background: #c0392b; color: #fff; border: none; border-radius: 8px; padding: 9px 14px; font-weight: 700; text-align: center; font-size: 14px; }
+  .green { color: #8f8; font-family: monospace; font-size: 12px; margin-top: 6px; }
+  .row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+  .lab { min-width: 52px; font-weight: 700; font-size: 13px; }
+  .seg { flex: 1; padding: 8px 2px; border-radius: 8px; font-size: 12px; font-weight: 700; text-align: center; background: #ffffff12; color: #cdd6ff; border: 1px solid #fff3; }
+  .seg.on { background: #2b7bff; color: #fff; border-color: #6ea8ff; }
+  .seg.warn { border-color: #f5c542aa; color: #f5c542; }
+  .seg.hot { border-color: #ff6b5eaa; color: #ff6b5e; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .fx { padding: 10px 6px; border-radius: 8px; font-size: 13px; font-weight: 700; text-align: center; background: #ffffff12; color: #cdd6ff; border: 1px solid #fff3; }
+  .fx.on { background: #2b7bff; color: #fff; border-color: #6ea8ff; }
+  .note { font-size: 12px; color: #9aa3c0; margin-top: 6px; line-height: 1.5; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 14px; }
+  .tab { flex: 1; padding: 10px; border-radius: 8px; text-align: center; font-weight: 700; font-size: 14px; background: #ffffff12; color: #cdd6ff; border: 1px solid #fff3; }
+  .tab.on { background: #2b7bff; color: #fff; border-color: #6ea8ff; }
+  .strip { height: 14px; border-radius: 7px; background: #000; border: 1px solid #fff2; margin: 4px 0 8px; overflow: hidden; position: relative; }
+  .strip > div { height: 100%; }
+  .dim { color: #667; font-size: 12px; padding: 8px 0; }
+  .points { margin-top: 20px; background: #12131c; border: 1px solid #fff3; border-radius: 14px; padding: 18px 22px; max-width: 900px; }
+  .points h2 { font-size: 16px; margin-bottom: 10px; }
+  .points li { margin: 6px 0 6px 18px; font-size: 14px; line-height: 1.6; color: #dfe4ff; }
+  .tag { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 10px; margin-left: 6px; vertical-align: middle; }
+  .tag.fw { background: #5a2b6e; color: #e8c8ff; }
+</style>
+</head>
+<body>
+<h1>硬體測試分頁 — mockup</h1>
+<div class="sub">左：現況（測試區塞在設定裡） / 右：優化（設定彈窗分成兩個分頁，「硬體測試」獨立成頁）</div>
+
+<div class="wrap">
+  <!-- ===== 現況 ===== -->
+  <div class="col">
+    <div class="col-title old">現況</div>
+    <div class="modal">
+      <div class="mhead"><div class="mtitle">設定</div><div class="x">&#10005;</div></div>
+      <div class="box">
+        <div class="bt">硬體連接（Arduino）</div>
+        <div class="btn-blue">已連接 (USB)｜點此重選 port</div>
+        <div class="btn-red">斷開/釋放埠</div>
+        <div class="green">A,S,0,0;B,S,0,100</div>
+      </div>
+      <div class="box">
+        <div class="bt">硬體測試（遊戲前逐一確認）</div>
+        <div class="fx" style="margin-bottom:8px;">Nano 內建燈（測連線）：暗</div>
+        <div class="row"><span class="lab">馬達 1P</span><span class="seg on">停</span><span class="seg">PWM 64</span><span class="seg">PWM 128</span></div>
+        <div class="row"><span class="lab">馬達 2P</span><span class="seg on">停</span><span class="seg">PWM 64</span><span class="seg">PWM 128</span></div>
+        <div class="grid2" style="margin-top:2px;"><div class="fx">燈條 1P：關</div><div class="fx on">燈條 2P：開</div></div>
+        <div class="btn-red" style="margin-top:8px;">全部停止</div>
+      </div>
+      <div class="dim">鏡頭透明度（越低越看得到MV）────── 25<br>能量條風格：科技藍｜街機紅黃｜霓虹管<br>Canon Rock 音量 ─────────── 70<br>（往下還要捲很久…）</div>
+    </div>
+  </div>
+
+  <!-- ===== 優化 ===== -->
+  <div class="col">
+    <div class="col-title new">優化：分頁式</div>
+    <div class="modal">
+      <div class="mhead"><div class="mtitle">設定</div><div class="x">&#10005;</div></div>
+      <div class="tabs"><div class="tab on">硬體測試</div><div class="tab">遊戲設定</div></div>
+
+      <div class="box">
+        <div class="bt">連接</div>
+        <div class="btn-blue">已連接 (USB)｜點此重選 port</div>
+        <div class="green">✓ 通訊正常！Nano 內建燈應已亮起</div>
+      </div>
+
+      <div class="box">
+        <div class="bt">馬達動力（點一下 = 該檔位持續轉；再點「停」）</div>
+        <div class="row"><span class="lab">1P</span><span class="seg on">停</span><span class="seg">5%</span><span class="seg">10%</span><span class="seg">15%</span><span class="seg warn">20%</span><span class="seg warn">25%</span><span class="seg hot">30%</span></div>
+        <div class="row"><span class="lab">2P</span><span class="seg on">停</span><span class="seg">5%</span><span class="seg">10%</span><span class="seg">15%</span><span class="seg warn">20%</span><span class="seg warn">25%</span><span class="seg hot">30%</span></div>
+        <div class="row"><span class="lab">雙測</span><span class="seg" style="flex:3;">兩台同時 12%（驗證 7A 上限用）</span><span class="seg on" style="flex:1;">停</span></div>
+        <div class="note">黃字 20-25%、紅字 30% 為高檔位：韌體限時 5 秒自動回落並強制冷卻 8 秒，避免驅動板過熱。</div>
+      </div>
+
+      <div class="box">
+        <div class="bt">燈條特效（預覽遊戲中所有效果）</div>
+        <div class="row" style="margin-bottom:8px;"><span class="lab">套用到</span><span class="seg">1P</span><span class="seg">2P</span><span class="seg on">兩條</span></div>
+        <div class="strip"><div style="width:65%;background:linear-gradient(90deg,#00e5ff,#00e5ff);"></div></div>
+        <div class="grid3">
+          <div class="fx on">能量條 65%</div><div class="fx">能量條 100%</div><div class="fx">反轉倒流</div>
+          <div class="fx">combo 藍</div><div class="fx">combo 金</div><div class="fx">combo 彩虹</div>
+          <div class="fx">PERFECT 閃白</div><div class="fx">最後10秒紅脈衝</div><div class="fx">勝利煙火</div>
+          <div class="fx">待機彩虹呼吸</div><div class="fx">就位漸滿</div><div class="fx">全暗</div>
+        </div>
+        <div class="note">上方黑條 = 燈條即時模擬預覽（網頁端同步畫出燈條現在應有的樣子，實體沒亮就是接線問題）。</div>
+      </div>
+
+      <div class="btn-red">全部停止（馬達 + 燈條）</div>
+      <div class="green" style="margin-top:8px;">A,F,26,0;B,S,0,0</div>
+    </div>
+  </div>
+</div>
+
+<div class="points">
+  <h2>改善重點（白話）</h2>
+  <ul>
+    <li><b>測試獨立成分頁</b>：現在測試區和音量、透明度混在一起要捲很久；分頁後一進來就是測試，展場檢查快很多。</li>
+    <li><b>馬達改成百分比 5%-30%</b>：現況按鈕寫「PWM 64/128」但韌體其實鎖在 12%，按了沒感覺、數字也看不懂——是誤導。改成誠實的百分比檔位，一路往上找最佳工作點。</li>
+    <li><b>高檔位有保險</b> <span class="tag fw">需更新韌體</span>：20% 以上韌體限時 5 秒自動回落 + 冷卻 8 秒，怎麼按都不會過熱（之前板子過熱就是持續 25%+ 造成）。</li>
+    <li><b>兩台同轉測試</b>：一鍵驗證你問的「7A 撐不撐得住」，看電供讀數即可。</li>
+    <li><b>燈條特效總覽</b> <span class="tag fw">需更新韌體</span>：遊戲中設計的所有效果（combo 變色、PERFECT 閃白、勝利煙火、待機彩虹…）每個都能單獨點來看，順便當展場燈光秀遙控器。</li>
+    <li><b>網頁端即時模擬條</b>：畫面上同步畫出燈條「應該長什麼樣」，實體沒跟上就知道是接線/電源問題，不用猜。</li>
+  </ul>
+</div>
+</body>
+</html>

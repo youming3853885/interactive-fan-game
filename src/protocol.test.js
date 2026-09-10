@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, testChannel, builtinLedLine } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, FX } from './protocol.js';
 
 describe('formatCommand', () => {
   it('組出 A,dir,pwm,energy;B,... 一行', () => {
@@ -11,19 +11,33 @@ describe('formatCommand', () => {
   });
 });
 
-describe('testChannel（硬體測試：馬達PWM＋燈條）', () => {
-  it('PWM 128/燈關 → 正轉 128、燈能量0', () => {
-    expect(testChannel(128, false)).toEqual({ dir: 'F', pwm: 128, energy: 0 });
+describe('motorTestLine（馬達分段測試：百分比→PWM）', () => {
+  it('5% → M,A,13', () => {
+    expect(motorTestLine('A', 5)).toBe('M,A,13\n');
   });
-  it('PWM 0/燈開 → 停轉、燈能量100', () => {
-    expect(testChannel(0, true)).toEqual({ dir: 'S', pwm: 0, energy: 100 });
+  it('20% → M,B,51', () => {
+    expect(motorTestLine('B', 20)).toBe('M,B,51\n');
   });
-  it('PWM 0/燈關 → 全停', () => {
-    expect(testChannel(0, false)).toEqual({ dir: 'S', pwm: 0, energy: 0 });
+  it('30% → M,A,77', () => {
+    expect(motorTestLine('A', 30)).toBe('M,A,77\n');
   });
-  it('可組成一行測試指令（馬達A PWM64、燈條B）', () => {
-    expect(formatCommand(testChannel(64, false), testChannel(0, true)))
-      .toBe('A,F,64,0;B,S,0,100\n');
+  it('停 → M,A,0', () => {
+    expect(motorTestLine('A', 0)).toBe('M,A,0\n');
+  });
+});
+
+describe('effectLine（燈條特效測試）', () => {
+  it('兩條勝利煙火 → E,D,9', () => {
+    expect(effectLine('D', FX.FIREWORK)).toBe('E,D,9\n');
+  });
+  it('1P 全暗 → E,A,0', () => {
+    expect(effectLine('A', FX.OFF)).toBe('E,A,0\n');
+  });
+  it('FX 特效碼與韌體約定一致', () => {
+    expect(FX).toEqual({
+      OFF: 0, E65: 1, E100: 2, REVERSE: 3, COMBO_BLUE: 4, COMBO_GOLD: 5,
+      COMBO_RAINBOW: 6, FLASH: 7, RED_PULSE: 8, FIREWORK: 9, IDLE_RAINBOW: 10, READY_FILL: 11,
+    });
   });
 });
 

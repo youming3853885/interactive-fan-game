@@ -3,7 +3,7 @@ import { CONFIG, fanCommand } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
-import { formatCommand, testChannel, builtinLedLine } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
 import { createUI } from './ui.js';
@@ -83,7 +83,8 @@ arduinoDisc.addEventListener('click', async () => {
 // 傳給設定面板的硬體控制組；settings-panel 會掛上 setTestEnabled（自檢期間鎖測試按鈕用）
 const arduinoCtl = {
   btn: arduinoBtn, status: arduinoStatus, disc: arduinoDisc,
-  test: (s) => sender.send(formatCommand(testChannel(s.pwmA, s.ledA), testChannel(s.pwmB, s.ledB))).catch(() => {}),
+  motorTest: (ch, pct) => sender.send(motorTestLine(ch, pct)).catch(() => {}),
+  effect: (tgt, code) => sender.send(effectLine(tgt, code)).catch(() => {}),
   testLed: (on) => sender.send(builtinLedLine(on)).catch(() => {}),
 };
 

@@ -5,10 +5,20 @@ export function formatCommand(a, b) {
   return `${fmt('A', a)};${fmt('B', b)}\n`;
 }
 
-// 硬體測試：某頻道的「馬達 PWM + 燈條開關」→ 指令物件。
-// pwm>0 正轉到該 PWM、pwm=0 停；燈開=能量100。同 token 同時帶馬達與燈，兩者獨立。
-export function testChannel(pwm, ledOn) {
-  return { dir: pwm > 0 ? 'F' : 'S', pwm: Math.max(0, Math.trunc(pwm)), energy: ledOn ? 100 : 0 };
+// 馬達分段測試：百分比 → 'M,A,51\n'。>12% 的檔位由韌體限時 5 秒自動回落＋冷卻。
+export function motorTestLine(ch, pct) {
+  return `M,${ch},${Math.round(255 * pct / 100)}\n`;
+}
+
+// 燈條特效碼（與韌體 renderFx 的 case 編號一一對應，改動要兩邊同步）
+export const FX = {
+  OFF: 0, E65: 1, E100: 2, REVERSE: 3, COMBO_BLUE: 4, COMBO_GOLD: 5,
+  COMBO_RAINBOW: 6, FLASH: 7, RED_PULSE: 8, FIREWORK: 9, IDLE_RAINBOW: 10, READY_FILL: 11,
+};
+
+// 燈條特效測試：target 'A'|'B'|'D'(兩條) → 'E,D,9\n'
+export function effectLine(target, code) {
+  return `E,${target},${code}\n`;
 }
 
 // Nano 內建 LED(D13)測試指令：'T,1\n'(亮)/'T,0\n'(暗)。用來驗證網頁↔Nano 序列通訊是否正常。
