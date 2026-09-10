@@ -97,8 +97,17 @@ export function createUI(canvas) {
   }
   // 手：角度跟真手(跟手方向)、半徑吸附到圓軌道(穩定不抖)；流星尾 + 畫圈時飄散粒子。
   const dispAng = { S: null, A: null, B: null }; // 顯示角度平滑（繞角 EMA，快轉不跳格）
-  function drawHandFX(key, pt, color, active, center, R, trackAng) {
+  const lastPos = { S: null, A: null, B: null }; // 最後顯示位置（休息段凍結用）
+  function drawHandFX(key, pt, color, active, center, R, trackAng, frozen) {
     const H = canvas.height;
+    if (frozen && lastPos[key]) { // 休息段：圖案凍在最後位置，不跟垂下的手亂跑
+      pushTrail(key, null); dispAng[key] = null;
+      const fp = lastPos[key];
+      ctx.save(); ctx.beginPath(); ctx.arc(fp.x, fp.y, H * 0.05, 0, Math.PI * 2);
+      ctx.fillStyle = '#00000066'; ctx.fill(); ctx.shadowColor = color; ctx.shadowBlur = 26;
+      ctx.strokeStyle = color; ctx.lineWidth = 5; ctx.stroke(); ctx.restore();
+      return;
+    }
     if (!pt) { pushTrail(key, null); dispAng[key] = null; return; }
     let mx = pt.x, my = pt.y;
     if (center && R && trackAng != null) {
@@ -121,6 +130,7 @@ export function createUI(canvas) {
       const rx = center.x + R * Math.cos(ang), ry = center.y + R * Math.sin(ang);
       mx = pt.x + (rx - pt.x) * K; my = pt.y + (ry - pt.y) * K;
     }
+    lastPos[key] = { x: mx, y: my };
     pushTrail(key, { x: mx, y: my });
     drawMeteor(key, color);
     if (active) { // 沿路飄散不規則粒子
@@ -656,7 +666,7 @@ export function createUI(canvas) {
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
-        drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R, state.ang); // 跟手旋轉沿軌道擺位
+        drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R, state.ang, state.segDir === 'S'); // 跟手旋轉沿軌道擺位；休息凍結
         restText(cx, cy, R);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
           frac: state.frac ?? gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false, ticks: TICKS });
@@ -667,7 +677,7 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
-          drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R, state[side].ang);
+          drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R, state[side].ang, state.segDir === 'S');
           restText(cx, cy, R);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
             frac: state[side].frac ?? gFrac(state[side].score), score: state[side].score, combo: state[side].combo,
