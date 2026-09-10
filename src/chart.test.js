@@ -18,6 +18,18 @@ describe('chartFromBpm', () => {
     const c = chartFromBpm(120, 3, 20);
     expect(c[c.length - 1]).toEqual({ dir: 'S', startSec: 16, endSec: 20 });
   });
+  it('休息段(S)一律 8~10 秒，各種 BPM 都成立（讓風機與玩家喘息）', () => {
+    for (const bpm of [90, 120, 140, 168, 200]) {
+      const c = chartFromBpm(bpm, 3, 300);
+      const rests = c.filter((s) => s.dir === 'S').slice(0, -1); // 最後一段可能被裁切，不檢查
+      expect(rests.length).toBeGreaterThan(0);
+      for (const s of rests) {
+        const len = s.endSec - s.startSec;
+        expect(len).toBeGreaterThanOrEqual(8 - 1e-6); // 容忍浮點累加誤差
+        expect(len).toBeLessThanOrEqual(10 + 1e-6);
+      }
+    }
+  });
 });
 describe('segmentAt', () => {
   const c = chartFromBpm(120, 3, 32);

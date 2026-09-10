@@ -1,5 +1,5 @@
 import { wristAngle, trackRotation } from './motion.js';
-import { CONFIG, fanCommand } from './game.js';
+import { CONFIG, fanForSegment } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
@@ -304,8 +304,12 @@ async function loop(pose) {
     const dirSign = segDir === 'R' ? -1 : 1;
     const energyOf = (om) => Math.min(100, Math.abs(om) / (guideOmega * 1.5) * 100);
     const endRound = (result, win) => {
-      ended = true; phase = 'victory'; victoryResult = result; sendStop(); mvVideo.pause(); sfx.fanfare(win);
-      setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 6000);
+      ended = true; phase = 'victory'; victoryResult = result; mvVideo.pause(); sfx.fanfare(win);
+      // 勝利畫面 10 秒，期間風機正轉慶祝（單人=2P、雙人=兩台）＋燈條全滿；回選歌時由 select 停一次
+      const fanOn = { dir: 'F', pwm: Math.round(255 * CONFIG.power), energy: 100 };
+      const fanOff = { dir: 'S', pwm: 0, energy: 100 };
+      sender.send(formatCommand(mode === 'single' ? fanOff : fanOn, fanOn)).catch(() => {});
+      setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 10000);
     };
     // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
     // marker 每跑滿一圈=完成一圈 → 用該圈平均轉速判定 PERFECT/GREAT/GOOD、加分/combo/特效音效。
@@ -344,9 +348,9 @@ async function loop(pose) {
     };
     if (mode === 'single') {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
-      const fs = fanCommand(omegaS, CONFIG); const e = energyOf(omegaS);
-      // 單人模式固定只吹 2P 風機（A 馬達停、燈光能量兩邊照送）
-      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fs, energy: e })).catch(() => {});
+      // 風機跟譜面：F/R 段正轉、S 休息段停；單人固定只吹 2P（燈光能量兩邊照送、跟玩家轉速）
+      const fan = fanForSegment(segDir, CONFIG); const e = energyOf(omegaS);
+      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fan, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         hand: handS, active: m.active });
@@ -354,8 +358,8 @@ async function loop(pose) {
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
       const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
-      const fa = fanCommand(omegaA, CONFIG), fb = fanCommand(omegaB, CONFIG);
-      sender.send(formatCommand({ ...fa, energy: energyOf(omegaA) }, { ...fb, energy: energyOf(omegaB) })).catch(() => {});
+      const fan = fanForSegment(segDir, CONFIG); // 兩台都跟譜面：F/R 段正轉、S 休息段停
+      sender.send(formatCommand({ ...fan, energy: energyOf(omegaA) }, { ...fan, energy: energyOf(omegaB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle,
         A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active },

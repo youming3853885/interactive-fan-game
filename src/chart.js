@@ -4,11 +4,13 @@ export function chartFromBpm(bpm, stars, roundSec) {
   const segBeats = Math.max(4, Math.round(8 / beatSec));
   const pattern = stars >= 4 ? ['F', 'R', 'F', 'R', 'S'] : ['F', 'R', 'S'];
   const segLen = segBeats * beatSec;
+  const restLen = Math.min(10, Math.max(8, segLen)); // 休息段固定 8~10 秒：讓風機與玩家喘息
   const chart = [];
   let t = 0, i = 0;
   while (t < roundSec) {
-    const end = Math.min(t + segLen, roundSec);
-    chart.push({ dir: pattern[i % pattern.length], startSec: t, endSec: end });
+    const dir = pattern[i % pattern.length];
+    const end = Math.min(t + (dir === 'S' ? restLen : segLen), roundSec);
+    chart.push({ dir, startSec: t, endSec: end });
     t = end; i++;
   }
   return chart;
