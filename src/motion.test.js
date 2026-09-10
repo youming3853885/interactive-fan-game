@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { wristAngle, angularDelta, trackRotation, direction, newCircleState, circleStep, createArmPicker } from './motion.js';
+import { wristAngle, angularDelta, trackRotation, direction, newCircleState, circleStep, circleAngle, createArmPicker } from './motion.js';
 
 describe('circleStep（動態圓心畫圈追蹤）', () => {
   const DT = 1 / 30;
@@ -55,11 +55,30 @@ describe('createArmPicker（手臂鎖定）', () => {
     const a = pick(person(kp(100, 100), kp(300, 250)));
     expect(a.wrist.x).toBe(100); // 左手較高
   });
-  it('另一隻手舉更高也不跳換（黏住原手）', () => {
+  it('另一隻手短暫舉更高不跳換（黏住原手）', () => {
     const pick = createArmPicker();
     pick(person(kp(100, 100), kp(300, 250)));
-    const a = pick(person(kp(100, 200), kp(300, 50))); // 右手突然更高
+    const a = pick(person(kp(100, 200), kp(300, 50))); // 右手突然更高（單幀）
     expect(a.wrist.x).toBe(100); // 仍是左手
+  });
+  it('玩家真的換手：另一隻手持續舉更高 → 換過去', () => {
+    const pick = createArmPicker(12, 5, 40); // switchFrames=5 方便測
+    pick(person(kp(100, 100), kp(300, 250)));
+    let a = null;
+    for (let k = 0; k < 5; k++) a = pick(person(kp(100, 300), kp(300, 50))); // 右手明顯高、左手垂下
+    expect(a.wrist.x).toBe(300); // 第 5 幀換到右手
+  });
+  it('circleAngle：畫圈中回傳相對動態圓心的角度；原地不動回 null', () => {
+    const st = newCircleState();
+    const DT2 = 1 / 30;
+    for (let i = 0; i < 60; i++) {
+      const t = i * DT2;
+      circleStep(st, { x: 300 + 80 * Math.cos(4 * t), y: 200 + 80 * Math.sin(4 * t) }, t, DT2);
+    }
+    expect(typeof circleAngle(st)).toBe('number');
+    const still = newCircleState();
+    for (let i = 0; i < 60; i++) circleStep(still, { x: 100, y: 100 }, i * DT2, DT2);
+    expect(circleAngle(still)).toBe(null);
   });
   it('鎖定的手短暫消失 → 回 null 不換手；超過 maxMiss 才重挑', () => {
     const pick = createArmPicker(3);

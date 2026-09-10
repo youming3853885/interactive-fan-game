@@ -96,14 +96,17 @@ export function createUI(canvas) {
     ctx.restore(); ctx.globalAlpha = 1;
   }
   // 手：角度跟真手(跟手方向)、半徑吸附到圓軌道(穩定不抖)；流星尾 + 畫圈時飄散粒子。
-  function drawHandFX(key, pt, color, active, center, R) {
+  function drawHandFX(key, pt, color, active, center, R, trackAng) {
     const H = canvas.height;
     if (!pt) { pushTrail(key, null); return; }
     let mx = pt.x, my = pt.y;
-    if (center && R) {
+    if (center && R && trackAng != null) {
+      // 有動態圓心追蹤角度：直接放軌道上（玩家站哪裡、圈畫多大都準確跟手的旋轉）
+      mx = center.x + R * Math.cos(trackAng); my = center.y + R * Math.sin(trackAng);
+    } else if (center && R) {
       const dx = pt.x - center.x, dy = pt.y - center.y;
       const ang = Math.atan2(dy, dx), rad = Math.hypot(dx, dy);
-      // 強吸附：角度跟真手、半徑幾乎鎖在圓軌上；越靠近中心越不拉(避免角度爆走亂甩)。
+      // 退路（追蹤未就緒）：角度跟真手、半徑幾乎鎖在圓軌上；越靠近中心越不拉(避免角度爆走亂甩)。
       const K = 0.85 * Math.min(1, rad / (R * 0.5));
       const rx = center.x + R * Math.cos(ang), ry = center.y + R * Math.sin(ang);
       mx = pt.x + (rx - pt.x) * K; my = pt.y + (ry - pt.y) * K;
@@ -643,7 +646,7 @@ export function createUI(canvas) {
       if (state.mode === 'single') {
         const R = Math.min(W, H) * 0.28, cx = W * 0.5, cy = H * 0.44;
         dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, state.segDir === 'R' ? colorB : colorA); // 中心方向箭頭
-        drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R); // 跟手方向+吸附圓軌
+        drawHandFX('S', state.hand, colorA, state.active, { x: cx, y: cy }, R, state.ang); // 跟手旋轉沿軌道擺位
         restText(cx, cy, R);
         drawGauge({ x: W * 0.09, y: H * 0.80, w: W * 0.82, h: H * 0.12, color: colorA, style: state.barStyle, key: 'S',
           frac: state.frac ?? gFrac(state.score), score: state.score, combo: state.combo, label: '', showLR: false, ticks: TICKS });
@@ -654,7 +657,7 @@ export function createUI(canvas) {
         for (const [side, color, cxf, gx] of [['A', colorA, 0.25, 0.04], ['B', colorB, 0.75, 0.52]]) {
           const cx = cxf * W, cy = H * 0.44;
           dirArrow({ x: cx, y: cy }, R * 0.52, state.segDir, color);
-          drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R);
+          drawHandFX(side, state[side].hand, color, state[side].active, { x: cx, y: cy }, R, state[side].ang);
           restText(cx, cy, R);
           drawGauge({ x: gx * W, y: H * 0.84, w: W * 0.44, h: H * 0.11, color, style: state.barStyle, key: side,
             frac: state[side].frac ?? gFrac(state[side].score), score: state[side].score, combo: state[side].combo,

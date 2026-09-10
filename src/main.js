@@ -1,4 +1,4 @@
-import { circleStep, newCircleState, createArmPicker } from './motion.js';
+import { circleStep, newCircleState, circleAngle, createArmPicker } from './motion.js';
 import { CONFIG, fanRun } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeForProgress, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
@@ -373,7 +373,7 @@ async function loop(pose) {
       sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fan, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
-        hand: handS, active: m.active, frac: e / 100, fever: feverState });
+        hand: handS, active: m.active, ang: circleAngle(cirS), frac: e / 100, fever: feverState });
       if (!ended && elapsed >= roundSec) endRound({ mode: 'single', score: scoreS.score, grade: gradeForProgress(scoreS.score, maxScore) }, true);
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
@@ -384,8 +384,8 @@ async function loop(pose) {
       sender.send(formatCommand({ dir: 'S', pwm: 0, energy: eA }, { ...fan, energy: eB })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, fever: feverState,
-        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active, frac: eA / 100 },
-        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active, frac: eB / 100 } });
+        A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active, ang: circleAngle(cirA), frac: eA / 100 },
+        B: { score: scoreB.score, combo: scoreB.combo, comboMult: comboMultiplier(scoreB.combo, SCORE_CFG), hand: handB, active: mB.active, ang: circleAngle(cirB), frac: eB / 100 } });
       if (!ended && elapsed >= roundSec) {
         const who = higherScore(scoreA.score, scoreB.score);
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);

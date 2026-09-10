@@ -58,11 +58,26 @@ export function circleStep(st, pt, t, dt, cfg = CIRCLE_CFG) {
   return d / dt;
 }
 
+// 顯示用：目前手腕相對「動態圓心」的角度（畫面手勢圖案沿軌道擺位用）。
+// 資料不足或半徑太小回 null（整合層退回位置吸附）。
+export function circleAngle(st, cfg = CIRCLE_CFG) {
+  const n = st.pts.length;
+  if (n < 5) return null;
+  const pt = st.pts[n - 1];
+  let cx = 0, cy = 0;
+  for (const p of st.pts) { cx += p.x; cy += p.y; }
+  cx /= n; cy /= n;
+  const dx = pt.x - cx, dy = pt.y - cy;
+  if (Math.hypot(dx, dy) < cfg.minRadius) return null;
+  return Math.atan2(dy, dx);
+}
+
 // ---- 手臂鎖定 ----
 // pickArm 每幀重挑「舉較高的手」，畫圈中另一隻手一抬就跳換目標 → 角度大跳。
-// 改成：鎖住目前追蹤的手，連續 maxMiss 幀無效才重挑。
-export function createArmPicker(maxMiss = 12) {
-  let side = null, miss = 0;
+// 改成：鎖住目前追蹤的手；連續 maxMiss 幀無效才重挑。
+// 玩家「真的換手」時也要跟上：另一隻手明顯舉更高（差 marginPx 以上）持續 switchFrames 幀 → 換過去。
+export function createArmPicker(maxMiss = 12, switchFrames = 15, marginPx = 40) {
+  let side = null, miss = 0, better = 0;
   const cand = (p, s) => {
     const wrist = s === 'L' ? p.leftWrist : p.rightWrist;
     const shoulder = s === 'L' ? p.leftShoulder : p.rightShoulder;
@@ -72,15 +87,22 @@ export function createArmPicker(maxMiss = 12) {
     if (!person) { if (++miss > maxMiss) side = null; return null; }
     if (side) {
       const c = cand(person, side);
-      if (c) { miss = 0; return c; }
+      if (c) {
+        miss = 0;
+        const o = cand(person, side === 'L' ? 'R' : 'L');
+        if (o && o.wrist.y < c.wrist.y - marginPx) {
+          if (++better >= switchFrames) { side = side === 'L' ? 'R' : 'L'; better = 0; return o; } // 換手
+        } else better = 0;
+        return c;
+      }
       if (++miss <= maxMiss) return null; // 短暫掉幀：等它回來，不急著換手
-      side = null;
+      side = null; better = 0;
     }
     const L = cand(person, 'L'), R = cand(person, 'R');
     const free = L && R ? (L.wrist.y <= R.wrist.y ? L : R) : (L || R); // 重挑：舉較高者
     if (!free) return null;
     side = free === L ? 'L' : 'R';
-    miss = 0;
+    miss = 0; better = 0;
     return free;
   };
 }
