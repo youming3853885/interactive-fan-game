@@ -25,7 +25,7 @@ npm run preview                   # 預覽 build 產物
 **`src/main.js` = 唯一協調者**：一個 `requestAnimationFrame` 迴圈 + phase 狀態機（`loading → select → ready → playing → victory`）。每幀：偵測手 → 更新純函數狀態 → 呼叫 `ui.render()` 畫 canvas → 送 serial 指令。所有跨 phase 的可變狀態（分數、chart、bpm、settings…）是 `main.js` 模組層變數。**注意作用域**：`loop()` 是頂層函式，若它引用只宣告在 `boot()` 內的變數會 ReferenceError → playing 首幀凍結（歷史上踩過 `settings`、`rotL/rotR` 兩次）。
 
 **純函數核心（有單元測試，`*.test.js`）**——邏輯都放這、可獨立驗證：
-- `motion.js` 手腕相對肩角度 → 角速度 omega（`trackRotation`）
+- `motion.js` 畫圈偵測＝**動態圓心追蹤**（`circleStep`：手腕軌跡移動平均當圓心 → 角速度 omega，含半徑門檻＋尖刺防護）＋`createArmPicker` 手臂鎖定（防左右手跳換）。⚠️ 勿改回「手腕相對肩膀」角度法——那只量得到掄大圈，胸前畫圈會失效
 - `chart.js` 依 BPM 生成 正轉F/反轉R/休息S 段落表 + `segmentAt`
 - `score.js` **每轉完一整圈才給分**：`revStep`(累積角度到 2π=一圈) → `judgeRev`(速率契合度 PERFECT/GREAT/GOOD) → `revScore`(固定分×`comboMultiplier`)；`gradeFor` 單人評級
 - `ready.js` 準備方塊/持握、`protocol.js` serial 指令格式、`settings.js` localStorage、`tracks.js` 曲目、`select-screen.js` 純工具

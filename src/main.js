@@ -1,11 +1,11 @@
-import { wristAngle, trackRotation } from './motion.js';
+import { circleStep, newCircleState, createArmPicker } from './motion.js';
 import { CONFIG, fanRun } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
 import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, FX } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
-import { createPoseReader, pickArm } from './pose.js';
+import { createPoseReader } from './pose.js';
 import { createUI } from './ui.js';
 import { createMusicWidget } from './music.js';
 import { loadSettings } from './settings.js';
@@ -115,9 +115,10 @@ const newScore = () => ({ score: 0, combo: 0, mult: 1, mAng: -Math.PI / 2, mAcc:
 let scoreA = newScore();
 let scoreB = newScore();
 let scoreS = newScore();
-const rotA = { lastAngle: null };
-const rotB = { lastAngle: null };
-const rotS = { lastAngle: null }; // 單人單手
+// 動態圓心畫圈追蹤（取代舊的「手腕相對肩膀」角度法）+ 手臂鎖定（防左右手跳換）
+const cirA = newCircleState(), cirB = newCircleState(), cirS = newCircleState();
+const pickA = createArmPicker(), pickB = createArmPicker(), pickS = createArmPicker();
+const resetCircle = (st) => { st.pts.length = 0; st.lastAngle = null; };
 // 手部顯示去抖：One Euro 自適應濾波（慢動作重壓雜訊=穩、快動作放行=跟手不延遲）。
 // 只影響畫面亮點/就位判定，不影響轉速計分。
 const smA = newEuro(), smB = newEuro(), smS = newEuro();
@@ -171,7 +172,7 @@ function startPlaying() {
   media.playTrack(selectedIdx, lenMode);               // 傳 lenMode，chorus 會載短片
   if (!mvAnalyser) { try { mvAnalyser = attachAnalyser(mvVideo); mvFreq = new Uint8Array(mvAnalyser.frequencyBinCount); } catch { mvAnalyser = null; } }
   scoreS = newScore();
-  rotA.lastAngle = null; rotB.lastAngle = null; rotS.lastAngle = null;
+  resetCircle(cirA); resetCircle(cirB); resetCircle(cirS);
   video.style.opacity = '0'; // 開打隱藏攝影機，只看 MV + 手
   startTime = performance.now();
   last = startTime;
@@ -246,11 +247,8 @@ function toCanvasFull(pt) {
 // 在「螢幕座標(鏡像後)」算角速度 → 正轉F=螢幕順時針恆對應 omega>0，左右一致。
 // 若實機發現方向相反，把 DIR_SIGN 改成 -1 即可整體翻轉。
 const DIR_SIGN = 1;
-function omegaScreen(rot, wrist, shoulder, mapFn, dt) {
-  const a = wristAngle(mapFn(wrist), mapFn(shoulder));
-  const r = trackRotation(rot, a, dt);
-  rot.lastAngle = r.state.lastAngle;
-  return DIR_SIGN * r.omega;
+function omegaCircle(cir, wrist, mapFn, now, dt) {
+  return DIR_SIGN * circleStep(cir, mapFn(wrist), now / 1000, dt);
 }
 
 async function loop(pose) {
@@ -261,16 +259,17 @@ async function loop(pose) {
   let handA = null, handB = null, handS = null;
   let omegaA = 0, omegaB = 0, omegaS = 0;
   if (phase !== 'select') {
+    // 掉幀時不清追蹤狀態：時間窗會自己淘汰舊點，手臂回來就無縫接續（大跳會被尖刺防護丟棄）
     if (mode === 'single') {
-      const arm = pickArm(await pose.readFull());
-      if (arm) { omegaS = omegaScreen(rotS, arm.wrist, arm.shoulder, toCanvasFull, dt); handS = toCanvasFull(arm.wrist); } else rotS.lastAngle = null;
+      const arm = pickS(await pose.readFull());
+      if (arm) { omegaS = omegaCircle(cirS, arm.wrist, toCanvasFull, now, dt); handS = toCanvasFull(arm.wrist); }
       handS = smoothPoint(smS, handS, dt);
     } else {
       // 左右半邊各自偵測 → 保證每邊各抓到一位玩家（螢幕左=A、右=B）。
-      const armA = pickArm(await pose.readHalf('A'));
-      const armB = pickArm(await pose.readHalf('B'));
-      if (armA) { omegaA = omegaScreen(rotA, armA.wrist, armA.shoulder, (p) => toCanvas(p, 'A'), dt); handA = toCanvas(armA.wrist, 'A'); } else rotA.lastAngle = null;
-      if (armB) { omegaB = omegaScreen(rotB, armB.wrist, armB.shoulder, (p) => toCanvas(p, 'B'), dt); handB = toCanvas(armB.wrist, 'B'); } else rotB.lastAngle = null;
+      const armA = pickA(await pose.readHalf('A'));
+      const armB = pickB(await pose.readHalf('B'));
+      if (armA) { omegaA = omegaCircle(cirA, armA.wrist, (p) => toCanvas(p, 'A'), now, dt); handA = toCanvas(armA.wrist, 'A'); }
+      if (armB) { omegaB = omegaCircle(cirB, armB.wrist, (p) => toCanvas(p, 'B'), now, dt); handB = toCanvas(armB.wrist, 'B'); }
       handA = smoothPoint(smA, handA, dt); handB = smoothPoint(smB, handB, dt);
     }
   }
