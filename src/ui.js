@@ -664,7 +664,7 @@ export function createUI(canvas) {
         }
         // 領先者皇冠 + 反超偵測
         const leader = state.A.score > state.B.score ? 'A' : state.B.score > state.A.score ? 'B' : null;
-        if (leader) drawCrown(W * (leader === 'A' ? 0.26 : 0.74), H * 0.795, H * 0.028);
+        if (leader) drawCrown(W * (leader === 'A' ? 0.26 : 0.74), H * 0.818, H * 0.026); // 坐在 COMBO 與能量條之間
         if (leader && prevLeader && leader !== prevLeader) {
           bursts.push({ x: W / 2, y: H * 0.3, color: gold, text: '反超！', life: 1 });
           flash(leader === 'A' ? colorA : colorB);
