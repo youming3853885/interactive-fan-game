@@ -1,9 +1,9 @@
 import { wristAngle, trackRotation } from './motion.js';
-import { CONFIG, fanForSegment } from './game.js';
+import { CONFIG, fanRun } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
-import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeFor, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, FX } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader, pickArm } from './pose.js';
 import { createUI } from './ui.js';
@@ -149,13 +149,11 @@ function startReady() {
   phase = 'ready';
 }
 
-// 本局理想最高分＝每圈都 PERFECT、combo 一路累積（能量條滿格＝達到此分）。
-function estimateMaxScore(sec, b) {
-  const ideal = (2 * Math.PI) / targetOmegaFor(b, SCORE_CFG);
-  const revs = Math.max(1, Math.floor(sec / ideal));
-  let s = 0; for (let i = 1; i <= revs; i++) s += revScore(i, 'PERFECT', SCORE_CFG);
-  return s || 1;
+// 滿條門檻＝依譜面精算理論滿分 × 0.7 校正（玩得不錯就能看到接近滿條）
+function barFullScore() {
+  return Math.max(1, Math.round(maxScoreForChart(chart, bpm, SCORE_CFG) * BAR_FULL_RATIO));
 }
+let urgentSent = false; // 最後 10 秒紅色模式只送一次
 
 function startPlaying() {
   const t = media.tracks[selectedIdx];
@@ -165,7 +163,8 @@ function startPlaying() {
   roundSec = pb.roundSec != null ? pb.roundSec         // chorus 固定 60
     : (lenMode === '2' ? Math.min(120, songLen) : songLen);
   chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec);
-  maxScore = estimateMaxScore(roundSec, bpm); // 本局理想最高分 → 能量條滿格基準
+  maxScore = barFullScore(); // 滿條基準（畫面能量條與燈條共用）
+  urgentSent = false;
   scoreA = newScore();
   scoreB = newScore();
   ended = false;
@@ -181,13 +180,14 @@ function startPlaying() {
   mvVideo.addEventListener('loadedmetadata', () => {
     if (pb.roundSec != null) return;                   // chorus：固定 60，不用 duration 覆蓋
     const sl = mvVideo.duration;
-    if (Number.isFinite(sl)) { roundSec = lenMode === '2' ? Math.min(120, sl) : sl; chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec); }
+    if (Number.isFinite(sl)) { roundSec = lenMode === '2' ? Math.min(120, sl) : sl; chart = chartFromBpm(bpm, bpmToStars(bpm), roundSec); maxScore = barFullScore(); }
   }, { once: true });
 }
 
 let lastStopPhase = ''; // 記住上次在哪個閒置階段送過停止，避免每幀狂送蓋掉硬體測試指令
 function sendStop() {
   sender.send(formatCommand({ dir: 'S', pwm: 0, energy: 0 }, { dir: 'S', pwm: 0, energy: 0 })).catch(() => {});
+  sender.send(urgentLine(false)).catch(() => {}); // 一併解除倒數紅色模式
 }
 
 async function boot() {
@@ -302,13 +302,14 @@ async function loop(pose) {
     const guideOmega = targetOmegaFor(bpm, SCORE_CFG);
     if (mvAnalyser) mvAnalyser.getByteFrequencyData(mvFreq); // 取 MV 即時頻譜
     const dirSign = segDir === 'R' ? -1 : 1;
-    const energyOf = (om) => Math.min(100, Math.abs(om) / (guideOmega * 1.5) * 100);
+    const progOf = (st) => Math.min(100, st.score / maxScore * 100); // 燈條=分數進度（與畫面能量條同一百分比）
     const endRound = (result, win) => {
       ended = true; phase = 'victory'; victoryResult = result; mvVideo.pause(); sfx.fanfare(win);
-      // 勝利畫面 10 秒，期間風機正轉慶祝（單人=2P、雙人=兩台）＋燈條全滿；回選歌時由 select 停一次
-      const fanOn = { dir: 'F', pwm: Math.round(255 * CONFIG.power), energy: 100 };
-      const fanOff = { dir: 'S', pwm: 0, energy: 100 };
-      sender.send(formatCommand(mode === 'single' ? fanOff : fanOn, fanOn)).catch(() => {});
+      // 勝利畫面 10 秒：煙火特效；雙人不論誰贏 P2 風扇續轉 10 秒、單人即停。
+      // 用 M 指令控馬達（不動燈）+ E 煙火；victory 期間不送 A/B 幀指令，煙火不被蓋掉。
+      sender.send(motorTestLine('A', 0)).catch(() => {});
+      sender.send(motorTestLine('B', mode === 'dual' ? 20 : 0)).catch(() => {});
+      sender.send(effectLine('D', FX.FIREWORK)).catch(() => {});
       setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 10000);
     };
     // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
@@ -338,6 +339,8 @@ async function loop(pose) {
           const mult = comboMultiplier(st.combo, SCORE_CFG);
           const leveled = mult > st.mult; st.mult = mult;
           ui.judge(j, pts, mult, cx, cy, color);
+          const fl = judgeFlashLine('D', j); // 燈條得分閃爍：PERFECT 金、GREAT 白、GOOD 不閃
+          if (fl) sender.send(fl).catch(() => {});
           sfx.hit(mult >= 3);                              // 每圈遊戲打點音（GOOD 只有這個）
           if (leveled) sfx.comboBurst(mult);              // combo 升級＝遊戲音效，不喊語音
           if (j === 'PERFECT') sfx.voice('Perfect');       // 只有 PERFECT/GREAT 喊真人語音
@@ -348,8 +351,8 @@ async function loop(pose) {
     };
     if (mode === 'single') {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
-      // 風機跟譜面：F/R 段正轉、S 休息段停；單人固定只吹 2P（燈光能量兩邊照送、跟玩家轉速）
-      const fan = fanForSegment(segDir, CONFIG); const e = energyOf(omegaS);
+      // 殘缺版：P2 風扇整場固定轉；燈條送分數進度
+      const fan = fanRun(CONFIG); const e = progOf(scoreS);
       sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fan, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
@@ -358,8 +361,9 @@ async function loop(pose) {
     } else {
       const mA = stepPlayer(scoreA, omegaA, canvas.width * 0.25, canvas.height * 0.44, '#2b7bff');
       const mB = stepPlayer(scoreB, omegaB, canvas.width * 0.75, canvas.height * 0.44, '#ff3b3b');
-      const fan = fanForSegment(segDir, CONFIG); // 兩台都跟譜面：F/R 段正轉、S 休息段停
-      sender.send(formatCommand({ ...fan, energy: energyOf(omegaA) }, { ...fan, energy: energyOf(omegaB) })).catch(() => {});
+      // 殘缺版：只有 P2 風扇；A 送 1P 進度、B 送 2P 進度（單條燈後到的 B 蓋前面 → 顯示 2P）
+      const fan = fanRun(CONFIG);
+      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: progOf(scoreA) }, { ...fan, energy: progOf(scoreB) })).catch(() => {});
       ui.render({ mode: 'dual', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle,
         A: { score: scoreA.score, combo: scoreA.combo, comboMult: comboMultiplier(scoreA.combo, SCORE_CFG), hand: handA, active: mA.active },
@@ -369,6 +373,8 @@ async function loop(pose) {
         endRound({ mode: 'dual', who, scoreA: scoreA.score, scoreB: scoreB.score }, !!who);
       }
     }
+    // 最後 10 秒：燈條進度條變紅+脈動（只送一次）
+    if (timeLeft <= 10 && !urgentSent) { urgentSent = true; sender.send(urgentLine(true)).catch(() => {}); }
     // 倒數滴答（最後 10 秒每秒一聲，最後 3 秒更急）
     const sec = Math.ceil(timeLeft);
     if (timeLeft <= 10 && sec !== lastCountSec) { lastCountSec = sec; if (sec > 0) sfx.countTick(sec <= 3); }
