@@ -33,6 +33,20 @@ export function revScore(combo, judgment, cfg) {
   return base * comboMultiplier(combo, cfg);
 }
 
+export const BAR_FULL_RATIO = 0.7; // 滿條門檻 = 理論滿分 × 此係數（小學生玩得不錯就能看到接近滿條）
+
+// 依譜面精算理論滿分：只計 F/R 段、每圈 PERFECT、combo 跨段累積。休息段不計分。
+export function maxScoreForChart(chart, bpm, cfg) {
+  const revTime = (2 * Math.PI) / targetOmegaFor(bpm, cfg);
+  let combo = 0, total = 0;
+  for (const seg of chart) {
+    if (seg.dir === 'S') continue;
+    const revs = Math.floor((seg.endSec - seg.startSec) / revTime);
+    for (let r = 0; r < revs; r++) { combo += 1; total += revScore(combo, 'PERFECT', cfg); }
+  }
+  return total || 1;
+}
+
 export function higherScore(a, b) {
   if (a > b) return 'A';
   if (b > a) return 'B';

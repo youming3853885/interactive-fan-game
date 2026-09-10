@@ -1,5 +1,20 @@
 import { describe, it, expect } from 'vitest';
-import { SCORE_CFG, targetOmegaFor, comboMultiplier, judgeBySpeed, revScore, higherScore, gradeFor } from './score.js';
+import { SCORE_CFG, targetOmegaFor, comboMultiplier, judgeBySpeed, revScore, higherScore, gradeFor, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
+import { chartFromBpm } from './chart.js';
+
+describe('maxScoreForChart（依譜面精算理論滿分）', () => {
+  it('120BPM/24秒(F8s+R8s+S8s) → 16圈全PERFECT含combo = 19200', () => {
+    // 120BPM 目標轉速 2π rad/s → 每圈 1 秒；F/R 各 8 圈、S 段不計分
+    const chart = chartFromBpm(120, 3, 24);
+    expect(maxScoreForChart(chart, 120, SCORE_CFG)).toBe(19200);
+  });
+  it('全休息譜面 → 回 1（避免除以零）', () => {
+    expect(maxScoreForChart([{ dir: 'S', startSec: 0, endSec: 10 }], 120, SCORE_CFG)).toBe(1);
+  });
+  it('滿條校正係數 0.7', () => {
+    expect(BAR_FULL_RATIO).toBe(0.7);
+  });
+});
 
 describe('targetOmegaFor', () => {
   it('每2拍一圈：120BPM → 2π rad/s', () => {
