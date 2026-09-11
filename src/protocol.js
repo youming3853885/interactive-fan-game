@@ -21,10 +21,18 @@ export function effectLine(target, code) {
   return `E,${target},${code}\n`;
 }
 
-// 得分閃爍(韌體疊加層，閃 250ms 自動回進度條)：PERFECT=1 金閃、GREAT=2 白閃、GOOD 不閃(回 null)
+// 得分閃爍(韌體疊加層，閃 250ms 自動回進度條)：PERFECT=1 金、GREAT=2 白、GOOD=3 藍
 export function judgeFlashLine(target, judgment) {
-  const n = judgment === 'PERFECT' ? 1 : judgment === 'GREAT' ? 2 : 0;
+  const n = judgment === 'PERFECT' ? 1 : judgment === 'GREAT' ? 2 : judgment === 'GOOD' ? 3 : 0;
   return n ? `J,${target},${n}\n` : null;
+}
+
+// 煙火色調（與韌體 renderFx case 9 對應）：0金白 1紫白 2藍白 3暖橘 4紅白
+export const FW_TONE = { GOLD: 0, PURPLE: 1, BLUE: 2, ORANGE: 3, RED: 4 };
+
+// 帶色調的勝利煙火：'E,D,9,<tone>'
+export function fireworkLine(target, tone) {
+  return `E,${target},${FX.FIREWORK},${tone}\n`;
 }
 
 // 最後倒數紅色模式：進度條變紅+脈動

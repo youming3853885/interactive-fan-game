@@ -174,8 +174,8 @@ export function createUI(canvas) {
     ctx.restore(); ctx.shadowBlur = 0;
   }
   function spawnFirework(x, y, color) {
-    for (let i = 0; i < 22; i++) {
-      const a = (i / 22) * Math.PI * 2, sp = 4 + (i % 4);
+    for (let i = 0; i < 30; i++) {
+      const a = (i / 30) * Math.PI * 2, sp = 4.5 + (i % 5) * 1.1;
       fireworks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, life: 1, color });
     }
   }
@@ -184,10 +184,21 @@ export function createUI(canvas) {
     for (let i = fireworks.length - 1; i >= 0; i--) {
       const p = fireworks[i]; p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.vx *= 0.98; p.life -= 0.018;
       if (p.life <= 0) { fireworks.splice(i, 1); continue; }
-      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 12;
-      ctx.beginPath(); ctx.arc(p.x, p.y, H * 0.006, 0, Math.PI * 2); ctx.fill();
+      ctx.globalAlpha = Math.max(0, p.life); ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(p.x, p.y, H * 0.008, 0, Math.PI * 2); ctx.fill();
     }
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+  }
+  // 結算煙火色調：單人依評級、雙人依贏家（每個評級都有明確的慶祝，C 級也熱鬧）
+  const GRADE_FW = {
+    S: ['#ffd76b', '#ffffff', '#ffe9a8'], A: ['#c99cff', '#ffffff', '#e6d4ff'],
+    B: ['#5ec8ff', '#ffffff', '#b6e6ff'], C: ['#ffa04d', '#ffd9b3', '#ffffff'],
+  };
+  function victoryCols(result) {
+    if (result.mode === 'single') return GRADE_FW[result.grade] || GRADE_FW.C;
+    if (result.who === 'A') return ['#2b7bff', '#8fdcff', '#ffffff'];
+    if (result.who === 'B') return ['#ff3b3b', '#ff9c9c', '#ffffff'];
+    return GRADE_FW.S;
   }
   let victoryKey = '', victoryT = 0;
   function starPath(x, y, r) {
@@ -744,10 +755,10 @@ export function createUI(canvas) {
       victoryT++;
       const p = Math.min(1, victoryT / 45), ease = 1 - Math.pow(1 - p, 3); // 入場彈跳
       ctx.fillStyle = '#000d'; ctx.fillRect(0, 0, W, H);
-      // 週期煙火
-      if (victoryT % 16 === 0) {
-        const cols = ['#ffd76b', '#4ec3ff', '#ff6bd0', '#8effc0'];
-        spawnFirework(W * (0.25 + 0.5 * ((victoryT / 16) % 2)), H * (0.22 + 0.1 * ((victoryT / 32) % 2)), cols[(victoryT / 16) % cols.length]);
+      // 週期煙火（加密加大；色調依評級/贏家）
+      if (victoryT % 10 === 0) {
+        const cols = victoryCols(result), k = victoryT / 10;
+        spawnFirework(W * (0.18 + 0.64 * ((k * 0.37) % 1)), H * (0.16 + 0.2 * ((k * 0.53) % 1)), cols[k % cols.length]);
       }
       drawFireworks();
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';

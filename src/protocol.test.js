@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, FX } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, fireworkLine, FW_TONE, FX } from './protocol.js';
 
 describe('judgeFlashLine（得分閃爍疊加層）', () => {
   it('PERFECT → 金閃 J,D,1', () => {
@@ -8,8 +8,16 @@ describe('judgeFlashLine（得分閃爍疊加層）', () => {
   it('GREAT → 白閃 J,D,2', () => {
     expect(judgeFlashLine('D', 'GREAT')).toBe('J,D,2\n');
   });
-  it('GOOD → 不閃(null)', () => {
-    expect(judgeFlashLine('D', 'GOOD')).toBe(null);
+  it('GOOD → 藍閃 J,D,3', () => {
+    expect(judgeFlashLine('D', 'GOOD')).toBe('J,D,3\n');
+  });
+});
+
+describe('fireworkLine（帶色調的勝利煙火）', () => {
+  it('S級金白 → E,D,9,0；C級暖橘 → E,D,9,3；2P勝紅白 → E,D,9,4', () => {
+    expect(fireworkLine('D', FW_TONE.GOLD)).toBe('E,D,9,0\n');
+    expect(fireworkLine('D', FW_TONE.ORANGE)).toBe('E,D,9,3\n');
+    expect(fireworkLine('D', FW_TONE.RED)).toBe('E,D,9,4\n');
   });
 });
 

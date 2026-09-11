@@ -54,6 +54,7 @@ unsigned long flashUntil = 0;
 CRGB flashColor = CRGB::White;
 bool urgent = false;
 bool fever = false;
+byte fwTone = 0;  // 煙火色調：0金白 1紫白 2藍白 3暖橘 4紅白（E,D,9,<tone> 設定）
 
 // ---- 馬達（0=A/1P、1=B/2P）：殘缺版不踢腳，指令直接輸出 ----
 const byte M_INA[2] = {IN1, IN3}, M_INB[2] = {IN2, IN4}, M_EN[2] = {ENA, ENB};
@@ -132,11 +133,16 @@ void renderFx(byte m, unsigned long t) {
     case 6: fill_rainbow(leds, NUM_LEDS, (t / 15) & 0xFF, 255 / NUM_LEDS + 1); break;
     case 7: fill_solid(leds, NUM_LEDS, t < 250 ? CRGB::White : CRGB::Black); break;
     case 8: fill_solid(leds, NUM_LEDS, CRGB::Red); nscale8_video(leds, NUM_LEDS, beatsin8(72, 30, 255)); break;
-    case 9: { // 勝利煙火：暗紫底 + 金白火花
+    case 9: { // 勝利煙火：暗底 + 火花，色調依 fwTone（0金白 1紫白 2藍白 3暖橘 4紅白）
+      CRGB main = CRGB::Gold, alt = CRGB::White;
+      if (fwTone == 1) main = CRGB(180, 60, 255);
+      else if (fwTone == 2) main = CRGB::Blue;
+      else if (fwTone == 3) { main = CRGB(255, 110, 20); alt = CRGB(255, 200, 90); }
+      else if (fwTone == 4) main = CRGB::Red;
       fill_solid(leds, NUM_LEDS, CRGB(10, 0, 18));
       for (byte k = 0; k < 10; k++) {
         unsigned int s = (unsigned int)(t / 90) * 31 + k * 7919; s ^= s << 7; s ^= s >> 9;
-        leds[s % NUM_LEDS] = (k & 1) ? CRGB::Gold : CRGB::White;
+        leds[s % NUM_LEDS] = (k & 1) ? main : alt;
       }
       break; }
     case 10: fill_rainbow(leds, NUM_LEDS, (t / 60) & 0xFF, 255 / NUM_LEDS + 1); nscale8_video(leds, NUM_LEDS, beatsin8(10, 25, 170)); break;
@@ -164,10 +170,15 @@ void applyToken(char* tok) {
   char id = tok[0];
   if (id == 'T') { digitalWrite(LED_BUILTIN, atoi(tok + 2) ? HIGH : LOW); return; }
   if (id == 'M') { motorTest(tok[2], atoi(tok + 4)); return; }
-  if (id == 'E') { fx = atoi(tok + 4); fxStart = millis(); ledsDirty = true; return; }
-  if (id == 'J') { // 得分閃爍：1=金(PERFECT) 2=白(GREAT)，250ms 自動消退
+  if (id == 'E') { // 特效（煙火可帶色調第4欄：E,D,9,3）
+    fx = atoi(tok + 4);
+    char* c2 = strchr(tok + 4, ',');
+    fwTone = c2 ? (byte)atoi(c2 + 1) : 0;
+    fxStart = millis(); ledsDirty = true; return;
+  }
+  if (id == 'J') { // 得分閃爍：1=金(PERFECT) 2=白(GREAT) 3=藍(GOOD)，250ms 自動消退
     int n = atoi(tok + 4);
-    if (n) { flashColor = (n == 1) ? CRGB::Gold : CRGB::White; flashUntil = millis() + 250; ledsDirty = true; }
+    if (n) { flashColor = (n == 1) ? CRGB::Gold : (n == 2) ? CRGB::White : CRGB::Blue; flashUntil = millis() + 250; ledsDirty = true; }
     return;
   }
   if (id == 'U') { urgent = atoi(tok + 2) != 0; ledsDirty = true; return; } // 倒數紅色模式

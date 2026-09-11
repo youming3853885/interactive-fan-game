@@ -3,7 +3,7 @@ import { CONFIG, fanRun } from './game.js';
 import { chartFromBpm, segmentAt } from './chart.js';
 import { SCORE_CFG, judgeBySpeed, revScore, targetOmegaFor, comboMultiplier, higherScore, gradeForProgress, maxScoreForChart, BAR_FULL_RATIO } from './score.js';
 import { BUILTIN_TRACKS, bpmToStars, pickPlayback } from './tracks.js';
-import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, FX } from './protocol.js';
+import { formatCommand, motorTestLine, effectLine, builtinLedLine, judgeFlashLine, urgentLine, feverLine, fireworkLine, FW_TONE } from './protocol.js';
 import { connectSerial, simSender } from './serial.js';
 import { createPoseReader } from './pose.js';
 import { createUI } from './ui.js';
@@ -332,7 +332,11 @@ async function loop(pose) {
       // 用 M 指令控馬達（不動燈）+ E 煙火；victory 期間不送 A/B 幀指令，煙火不被蓋掉。
       sender.send(motorTestLine('A', 0)).catch(() => {});
       sender.send(motorTestLine('B', mode === 'dual' ? 20 : 0)).catch(() => {});
-      sender.send(effectLine('D', FX.FIREWORK)).catch(() => {});
+      // 燈條煙火色調：單人依評級（S金/A紫/B藍/C暖橘）、雙人依贏家（1P藍/2P紅/平手金）
+      const tone = result.mode === 'single'
+        ? ({ S: FW_TONE.GOLD, A: FW_TONE.PURPLE, B: FW_TONE.BLUE, C: FW_TONE.ORANGE }[result.grade] ?? FW_TONE.ORANGE)
+        : result.who === 'A' ? FW_TONE.BLUE : result.who === 'B' ? FW_TONE.RED : FW_TONE.GOLD;
+      sender.send(fireworkLine(mode === 'single' ? 'B' : 'D', tone)).catch(() => {}); // 單人燈效做在 2P
       setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 10000);
     };
     // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
@@ -362,7 +366,7 @@ async function loop(pose) {
           const mult = comboMultiplier(st.combo, SCORE_CFG);
           const leveled = mult > st.mult; st.mult = mult;
           ui.judge(j, pts, mult, cx, cy, color, pace);
-          const fl = judgeFlashLine('D', j); // 燈條得分閃爍：PERFECT 金、GREAT 白、GOOD 不閃
+          const fl = judgeFlashLine(mode === 'single' ? 'B' : 'D', j); // 燈條得分閃爍：金/白/藍；單人做在 2P
           if (fl) sender.send(fl).catch(() => {});
           sfx.hit(mult >= 3);                              // 每圈遊戲打點音（GOOD 只有這個）
           if (leveled) sfx.comboBurst(mult);              // combo 升級＝遊戲音效，不喊語音
@@ -375,9 +379,9 @@ async function loop(pose) {
     const feverState = { on: feverOn, left: Math.max(0, Math.ceil((feverUntil - performance.now()) / 1000)) };
     if (mode === 'single') {
       const m = stepPlayer(scoreS, omegaS, canvas.width * 0.5, canvas.height * 0.44, '#2b7bff');
-      // 殘缺版：P2 風扇整場固定轉；燈條送分數進度
+      // 殘缺版：P2 風扇整場固定轉；單人燈條效果一律做在 2P（A 頻道燈保持暗）
       const fan = fanRun(CONFIG); const e = progOf(scoreS, 'S');
-      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: e }, { ...fan, energy: e })).catch(() => {});
+      sender.send(formatCommand({ dir: 'S', pwm: 0, energy: 0 }, { ...fan, energy: e })).catch(() => {});
       ui.render({ mode: 'single', timeLeft, segDir, nextDir: next ? next.dir : null, nextIn: remain, guideOmega, maxScore, spectrum: mvFreq,
         barStyle: settings.barStyle, score: scoreS.score, combo: scoreS.combo, comboMult: comboMultiplier(scoreS.combo, SCORE_CFG),
         hand: handS, active: m.active, ang: circleAngle(cirS), frac: e / 100, fever: feverState });
