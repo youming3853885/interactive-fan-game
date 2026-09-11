@@ -336,7 +336,7 @@ async function loop(pose) {
       const tone = result.mode === 'single'
         ? ({ S: FW_TONE.GOLD, A: FW_TONE.PURPLE, B: FW_TONE.BLUE, C: FW_TONE.ORANGE }[result.grade] ?? FW_TONE.ORANGE)
         : result.who === 'A' ? FW_TONE.BLUE : result.who === 'B' ? FW_TONE.RED : FW_TONE.GOLD;
-      sender.send(fireworkLine(mode === 'single' ? 'B' : 'D', tone)).catch(() => {}); // 單人燈效做在 2P
+      sender.send(fireworkLine('B', tone)).catch(() => {}); // 煙火一律做在 2P（單雙人皆同，實體只有這一條）
       setTimeout(() => { selectScreen.show(media.tracks); showControls(true); video.style.opacity = ''; phase = 'select'; }, 10000);
     };
     // 一位玩家：偵測「在正確方向畫圈」(平滑omega+遲滯)→ marker 以固定速度沿圈勻速跑；
